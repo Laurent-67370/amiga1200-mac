@@ -214,26 +214,70 @@ static void emu_frame(void) {
   stat_busy_us += (now_ms() - t0) * 1000.0;
   stat_frames++;
 }
+/* Disquettes, manettes, bruit des lecteurs : demandés par l'interface, faits par ce fil entre deux images. L'interface
+ * ne prend jamais le verrou du cœur : une image longue (ou un cœur bloqué) ne gèle pas l'application. */
+#define OPQ 16
+struct op { int kind, a, b; char path[1024]; };   /* 1 disquette, 2 type de manette, 3 bruit des lecteurs */
+static struct op opq[OPQ];
+static unsigned op_w, op_r;
+static pthread_mutex_t op_mtx = PTHREAD_MUTEX_INITIALIZER;
+static void op_push(int kind, int a, int b, const char *path) {
+  pthread_mutex_lock(&op_mtx);
+  unsigned n = (op_w + 1) % OPQ;
+  if (n != op_r) {
+    struct op *o = &opq[op_w];
+    o->kind = kind; o->a = a; o->b = b;
+    snprintf(o->path, sizeof o->path, "%s", path ? path : "");
+    op_w = n;
+  }
+  pthread_mutex_unlock(&op_mtx);
+}
+static void ops_run(void) {
+  for (;;) {
+    struct op o;
+    pthread_mutex_lock(&op_mtx);
+    if (op_r == op_w) { pthread_mutex_unlock(&op_mtx); return; }
+    o = opq[op_r]; op_r = (op_r + 1) % OPQ;
+    pthread_mutex_unlock(&op_mtx);
+    pthread_mutex_lock(&emu_mtx);
+    if (o.kind == 1) { if (o.path[0]) fe_drive_insert(o.a, o.path); else fe_drive_eject(o.a); }
+    else if (o.kind == 2) retro_set_controller_port_device((unsigned)o.a, (unsigned)o.b);
+    else if (o.kind == 3) amb_set_floppy_sound(o.a);
+    pthread_mutex_unlock(&emu_mtx);
+  }
+}
+
+/* Sauvegardes d'état : le fil de l'émulation sérialise lui-même (taille comprise) ; l'interface attend au plus
+ * 3 secondes, puis abandonne : le fil n'exécute plus la commande */
 static void emu_cmd_run(void) {
+  ops_run();
   pthread_mutex_lock(&cmd_mtx);
   if (cmd_code && !cmd_done) {
     pthread_mutex_lock(&emu_mtx);
-    cmd_res = cmd_code == 1 ? fe_state_save(cmd_buf, cmd_len) : fe_state_load(cmd_buf, cmd_len);
+    if (cmd_code == 1) {
+      unsigned n = fe_state_size();
+      void *b = n ? malloc(n) : NULL;
+      cmd_res = b && fe_state_save(b, n);
+      if (cmd_res) { cmd_buf = b; cmd_len = n; } else free(b);
+    } else cmd_res = fe_state_load(cmd_buf, cmd_len);
     pthread_mutex_unlock(&emu_mtx);
     cmd_done = 1;
     pthread_cond_broadcast(&cmd_cv);
   }
   pthread_mutex_unlock(&cmd_mtx);
 }
-static int emu_cmd(int code, void *buf, unsigned len) {
+/* code 1 : sauvegarde, le tampon produit revient dans *buf (à libérer) ; code 2 : reprise depuis buf */
+static int emu_cmd(int code, void **buf, unsigned *len) {
   if (emu_state != 2) return 0;
   pthread_mutex_lock(&cmd_mtx);
-  cmd_code = code; cmd_buf = buf; cmd_len = len; cmd_done = 0; cmd_res = 0;
-  while (!cmd_done && emu_state == 2 && !emu_stop) {
+  cmd_code = code; cmd_buf = code == 2 ? *buf : NULL; cmd_len = code == 2 ? *len : 0; cmd_done = 0; cmd_res = 0;
+  for (int waited = 0; !cmd_done && emu_state == 2 && !emu_stop && waited < 30; waited++) {
     struct timespec t; clock_gettime(CLOCK_REALTIME, &t); t.tv_nsec += 100000000; if (t.tv_nsec >= 1000000000) { t.tv_sec++; t.tv_nsec -= 1000000000; }
     pthread_cond_timedwait(&cmd_cv, &cmd_mtx, &t);
   }
   int r = cmd_done ? cmd_res : 0;
+  if (code == 1 && r) { *buf = cmd_buf; *len = cmd_len; }
+  if (!cmd_done) cmd_done = 1;
   cmd_code = 0;
   pthread_mutex_unlock(&cmd_mtx);
   return r;
@@ -296,30 +340,15 @@ void amb_key(int down, unsigned retrok) {
   kq[kq_w] = retrok | (down ? 0x80000000u : 0);
   __atomic_store_n(&kq_w, n, __ATOMIC_RELEASE);
 }
-void amb_port_device(unsigned port, unsigned device) {
-  pthread_mutex_lock(&emu_mtx);
-  retro_set_controller_port_device(port, device);
-  pthread_mutex_unlock(&emu_mtx);
-}
+void amb_port_device(unsigned port, unsigned device) { op_push(2, (int)port, (int)device, NULL); }
 
 /* ---------- disquettes, sauvegardes ---------- */
-void amb_insert_disk(int drive, const char *path) {
-  pthread_mutex_lock(&emu_mtx);
-  if (path && *path) fe_drive_insert(drive, path); else fe_drive_eject(drive);
-  pthread_mutex_unlock(&emu_mtx);
-}
-void amb_floppy_sound(int on) {
-  pthread_mutex_lock(&emu_mtx);
-  amb_set_floppy_sound(on);
-  pthread_mutex_unlock(&emu_mtx);
-}
+void amb_insert_disk(int drive, const char *path) { op_push(1, drive, 0, path); }
+void amb_floppy_sound(int on) { op_push(3, on, 0, NULL); }
 int amb_save_state(const char *path) {
   int ok = 0;
-  pthread_mutex_lock(&emu_mtx);
-  unsigned n = fe_state_size();
-  pthread_mutex_unlock(&emu_mtx);
-  void *buf = n ? malloc(n) : NULL;
-  if (buf && emu_cmd(1, buf, n)) {
+  void *buf = NULL; unsigned n = 0;
+  if (emu_cmd(1, &buf, &n)) {
     FILE *f = fopen(path, "wb");
     if (f) { ok = fwrite(buf, 1, n, f) == n; fclose(f); }
   }
@@ -332,7 +361,7 @@ int amb_load_state(const char *path) {
   if (!f) return 0;
   fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
   void *buf = n > 0 ? malloc((size_t)n) : NULL;
-  if (buf && fread(buf, 1, (size_t)n, f) == (size_t)n) ok = emu_cmd(2, buf, (unsigned)n);
+  if (buf && fread(buf, 1, (size_t)n, f) == (size_t)n) { unsigned len = (unsigned)n; ok = emu_cmd(2, &buf, &len); }
   fclose(f); free(buf);
   return ok;
 }
