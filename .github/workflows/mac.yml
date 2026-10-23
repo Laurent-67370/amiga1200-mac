@@ -1,0 +1,62 @@
+name: Application Mac
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    runs-on: macos-15   # Apple Silicon : le JIT ARM64 est compilé et essayé
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # Objets du cœur Amiberry gardés d'une compilation à l'autre (build-core.sh jette ceux d'anciens correctifs)
+      - uses: actions/cache@v4
+        with:
+          path: native/src
+          key: amiberry-mac-${{ hashFiles('native/build-core.sh', 'native/patches/*.patch') }}-${{ github.sha }}
+          restore-keys: amiberry-mac-${{ hashFiles('native/build-core.sh', 'native/patches/*.patch') }}-
+
+      - name: Cœur Amiberry ARM64 avec JIT
+        id: core
+        run: native/build-core.sh
+
+      - name: Application et image disque
+        run: scripts/build-app.sh
+
+      # Essai réel sur le Mac de la compilation : AROS démarre sur un A1200 avec JIT, sans fenêtre
+      - name: Essai du cœur (AROS, JIT)
+        run: |
+          "build/Amiga 1200.app/Contents/MacOS/Amiga1200" --selftest 1500
+          tail -40 ~/Library/Application\ Support/Amiga1200/journal.txt || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: amiga1200-mac
+          path: build/amiga1200-mac.dmg
+
+      - name: Journal de compilation du cœur
+        if: failure() && steps.core.outcome == 'failure'
+        run: tail -200 native/out/make.log || true
+
+      - name: Publication « dev »
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dev
+          name: Version de test (compilation ${{ github.run_number }})
+          prerelease: true
+          make_latest: false
+          body: |
+            Application Mac (Apple Silicon) construite automatiquement depuis main (${{ github.sha }}).
+            Installation : ouvrir amiga1200-mac.dmg, glisser « Amiga 1200 » dans Applications. Au premier lancement,
+            macOS la bloque (développeur non vérifié) : Réglages Système → Confidentialité et sécurité → « Ouvrir quand même ».
+          files: build/amiga1200-mac.dmg

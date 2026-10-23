@@ -1,0 +1,6 @@
+.DS_Store
+native/src/
+native/out/
+build/
+*.p12
+*.jks
