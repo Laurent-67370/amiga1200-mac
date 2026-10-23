@@ -79,6 +79,8 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
     func applicationWillTerminate(_ n: Notification) {
+        // Image du jeu pour la Bibliothèque, s'il n'en a pas encore
+        if amb_state() == 2, let g = gameName { _ = Captures.save(name: g, gallery: false, onlyIfMissing: true) }
         amb_stop()
         usleep(200_000)   // écriture des disques
     }
@@ -107,6 +109,7 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         m.addItem(.separator())
         add("Image nette ou lisse", #selector(toggleSharp), "i")
         add("Plein écran", #selector(fullScreen), "f", [.command, .control])
+        add("Capture d'écran", #selector(capture), "k")
         add("Bruit des lecteurs", #selector(toggleFloppySound), "")
         add("Turbo", #selector(toggleTurbo), "t")
         add("Journal", #selector(openLog), "")
@@ -141,6 +144,17 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func toggleFloppySound() {
         Settings.shared.floppySound.toggle(); amb_floppy_sound(Settings.shared.floppySound ? 1 : 0)
         flash(Settings.shared.floppySound ? "Bruit des lecteurs" : "Lecteurs silencieux")
+    }
+    /// Jeu en cours (son image dans la Bibliothèque) : l'archive WHDLoad, sinon la disquette DF0:, sinon le premier disque dur
+    var gameName: String? {
+        if Settings.isWhd(content) { return (content as NSString).lastPathComponent }
+        let s = Settings.shared
+        let p = !s.df0.isEmpty ? s.df0 : s.hds.first ?? ""
+        return p.isEmpty ? nil : (p as NSString).lastPathComponent
+    }
+    @objc func capture() {
+        let ok = Captures.save(name: gameName ?? "Amiga", gallery: true)
+        flash(ok ? "Capture enregistrée (Images/Amiga1200 et Bibliothèque)" : "Capture impossible")
     }
     @objc func openLog() { NSWorkspace.shared.open(Paths.log) }
     /// Le cœur ne se rallume pas dans le même processus : un nouveau processus prend la suite

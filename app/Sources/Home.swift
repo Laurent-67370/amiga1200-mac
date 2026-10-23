@@ -12,6 +12,9 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
     var hdLabel = NSTextField(wrappingLabelWithString: "")
     var modelPopup = NSPopUpButton()
     var checks: [(NSButton, () -> Bool)] = []
+    let libTabs = NSSegmentedControl(labels: ["🎮 Jeux WHDLoad", "💾 Disquettes", "🗄 Disques durs"], trackingMode: .selectOne, target: nil, action: nil)
+    let libList = NSStackView()
+    var libKind = Library.whd
 
     func applicationDidFinishLaunching(_ n: Notification) {
         Paths.installResources()
@@ -33,6 +36,14 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
             button("Amiga 500") { [self] in s.model = "A500"; s.jit = false; s.rtg = false; refresh() },
         ]))
 
+        col.addArrangedSubview(section("📚 Bibliothèque"))
+        libTabs.target = self; libTabs.action = #selector(libTab)
+        col.addArrangedSubview(libTabs)
+        libList.orientation = .vertical; libList.alignment = .leading; libList.spacing = 4
+        col.addArrangedSubview(libList)
+        col.addArrangedSubview(row([button("Ajouter des fichiers…") { [self] in addFiles(pickMany("Jeux WHDLoad (.lha), disquettes, disques durs (.hdf) ou Kickstart", multiple: true)) }]))
+        col.addArrangedSubview(note("Glissez aussi vos fichiers sur cette fenêtre depuis le Finder. Un jeu WHDLoad se lance d'un clic ; un Kickstart glissé ici est installé comme ROM de la machine."))
+
         col.addArrangedSubview(section("🔑 Kickstart"))
         col.addArrangedSubview(romLabel)
         col.addArrangedSubview(row([
@@ -43,9 +54,9 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         col.addArrangedSubview(section("💾 Disques"))
         col.addArrangedSubview(df0Label)
         col.addArrangedSubview(row([
-            button("DF0:…") { [self] in if let p = pick("Disquette DF0: (ADF, DMS, IPF…) ou jeu WHDLoad (.lha)") { s.df0 = p; refresh() } },
+            button("DF0:…") { [self] in if let p = pick("Disquette DF0: (ADF, DMS, IPF…) ou jeu WHDLoad (.lha)") { Library.add(p); s.df0 = p; refresh() } },
             button("Éjecter DF0:") { [self] in s.df0 = ""; refresh() },
-            button("DF1:…") { [self] in if let p = pick("Disquette DF1:") { s.df1 = p; refresh() } },
+            button("DF1:…") { [self] in if let p = pick("Disquette DF1:") { Library.add(p); s.df1 = p; refresh() } },
             button("Éjecter DF1:") { [self] in s.df1 = ""; refresh() },
         ]))
         col.addArrangedSubview(df1Label)
@@ -79,7 +90,13 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         col.translatesAutoresizingMaskIntoConstraints = false
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 760), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Amiga 1200"
-        window.contentView = scroll
+        // Fichiers glissés depuis le Finder : Bibliothèque ou Kickstart
+        let drop = DropView(frame: window.contentView?.bounds ?? .zero)
+        drop.onDrop = { [self] paths in addFiles(paths) }
+        scroll.frame = drop.bounds
+        scroll.autoresizingMask = [.width, .height]
+        drop.addSubview(scroll)
+        window.contentView = drop
         NSLayoutConstraint.activate([
             col.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
             col.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
@@ -122,6 +139,7 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         hdLabel.stringValue = s.hds.isEmpty ? "Disques durs : aucun" :
             "Disques durs :\n" + s.hds.enumerated().map { "DH\($0.offset): \(($0.element as NSString).lastPathComponent)" }.joined(separator: "\n")
         modelPopup.selectItem(withTitle: s.model)
+        refreshLibrary()
         for (b, get) in checks { b.state = get() ? .on : .off }
     }
 
@@ -156,6 +174,81 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         return l
     }
 
+    // ---------- Bibliothèque ----------
+    @objc func libTab() { libKind = [Library.whd, Library.floppy, Library.hdf][max(libTabs.selectedSegment, 0)]; refreshLibrary() }
+
+    func refreshLibrary() {
+        let kinds = [Library.whd, Library.floppy, Library.hdf]
+        let items = Library.all()
+        for (i, k) in kinds.enumerated() {
+            let n = items.filter { $0.kind == k }.count
+            libTabs.setLabel(["🎮 Jeux WHDLoad", "💾 Disquettes", "🗄 Disques durs"][i] + (n > 0 ? " (\(n))" : ""), forSegment: i)
+        }
+        libTabs.selectedSegment = kinds.firstIndex(of: libKind) ?? 0
+        libList.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let shown = items.filter { $0.kind == libKind }
+        if shown.isEmpty {
+            libList.addArrangedSubview(note(libKind == Library.whd ? "Aucun jeu. Ajoutez des archives WHDLoad (.lha) : un clic les lance, sans disque dur à préparer."
+                : libKind == Library.floppy ? "Aucune disquette (ADF, DMS, IPF…)." : "Aucun disque dur (.hdf)."))
+            return
+        }
+        for it in shown {
+            var views: [NSView] = []
+            let img = NSImageView()
+            img.imageScaling = .scaleProportionallyUpOrDown
+            img.image = NSImage(contentsOf: Captures.of(it.name))
+            img.translatesAutoresizingMaskIntoConstraints = false
+            img.widthAnchor.constraint(equalToConstant: 64).isActive = true
+            img.heightAnchor.constraint(equalToConstant: 48).isActive = true
+            views.append(img)
+            let label = NSTextField(labelWithString: it.title + (it.exists ? "" : "  (introuvable)"))
+            label.lineBreakMode = .byTruncatingTail
+            label.textColor = it.exists ? .labelColor : .tertiaryLabelColor
+            label.translatesAutoresizingMaskIntoConstraints = false
+            label.widthAnchor.constraint(equalToConstant: 300).isActive = true
+            views.append(label)
+            switch it.kind {
+            case Library.whd:
+                views.append(ClosureButton("▶ Jouer") { [self] in playWhd(it) })
+            case Library.floppy:
+                views.append(ClosureButton("▶ Jouer") { [self] in Library.touch(it.path); s.df0 = it.path; refresh(); powerOn() })
+                views.append(ClosureButton("DF0:") { [self] in Library.touch(it.path); s.df0 = it.path; refresh() })
+            default:
+                let on = s.hds.contains(it.path)
+                views.append(ClosureButton(on ? "✓ Branché" : "+ Brancher") { [self] in
+                    if on { s.hds = s.hds.filter { $0 != it.path } }
+                    else if s.hds.count < 8 { Library.touch(it.path); s.hds = s.hds + [it.path] }
+                    refresh()
+                })
+            }
+            views.append(ClosureButton("✕") { [self] in Library.remove(it.path); refreshLibrary() })
+            libList.addArrangedSubview(row(views))
+        }
+    }
+
+    /// Fichiers choisis ou glissés : un Kickstart est installé, le reste rangé dans la Bibliothèque
+    func addFiles(_ paths: [String]) {
+        var added = 0, last: String?
+        for p in paths {
+            if Library.kind(p) == Library.rom { installRom(p); continue }
+            if Library.add(p) { added += 1; last = Library.kind(p) }
+        }
+        if let k = last { libKind = k }
+        if paths.count > 0 && added == 0 && !paths.contains(where: { Library.kind($0) == Library.rom }) {
+            alert("Fichiers non reconnus", "La Bibliothèque accepte les jeux WHDLoad (.lha), les disquettes (ADF, DMS, IPF…) et les disques durs (.hdf).")
+        }
+        refresh()
+    }
+
+    func playWhd(_ it: LibItem) {
+        guard s.userRom else {
+            alert("Kickstart nécessaire", "WHDLoad a besoin d'un vrai Kickstart (3.1 de l'A1200 de préférence) : AROS ne lui suffit pas.")
+            return
+        }
+        Library.touch(it.path)
+        launch(it.path)
+    }
+
     @objc func modelChanged() { s.model = modelPopup.titleOfSelectedItem ?? "A1200"; refresh() }
 
     func pick(_ message: String, multiple: Bool = false) -> String? { pickMany(message, multiple: false).first }
@@ -169,6 +262,10 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
 
     func chooseRom() {
         guard let p = pick("Kickstart (fichier ROM, 3.1 pour l'A1200)") else { return }
+        installRom(p)
+    }
+
+    func installRom(_ p: String) {
         do {
             try? FileManager.default.removeItem(at: Paths.kick)
             try FileManager.default.copyItem(atPath: p, toPath: Paths.kick.path)
@@ -198,8 +295,14 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
             alert("Kickstart nécessaire", "WHDLoad a besoin d'un vrai Kickstart (3.1 de l'A1200 de préférence) : AROS ne lui suffit pas.")
             return
         }
-        amb_set_log(Paths.log.path)
-        let content = Config.content(s)
+        if !s.df0.isEmpty { Library.add(s.df0) }
+        for h in s.hds { Library.add(h) }
+        launch(Config.content(s))
+        refresh()
+    }
+
+    /// L'émulation dans un nouveau processus de cette application
+    func launch(_ content: String) {
         let p = Process()
         p.executableURL = Bundle.main.executableURL
         p.arguments = ["--emu", content]
