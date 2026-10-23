@@ -24,13 +24,18 @@ Il faut macOS 13 ou plus récent, sur un Mac Apple Silicon.
 - **Écran d'accueil** : préréglages (AGS / Workbench, A1200 d'origine, Amiga 500), Kickstart (le vôtre, sinon la ROM
   libre **AROS** fournie), disquettes DF0: et DF1:, jusqu'à **8 disques durs** (HDF, AGS compris), machine (A500, A600,
   A1200, A4000), JIT, carte graphique RTG, volume SHARED:, NTSC, bruit des lecteurs, image nette ou lisse.
-- **Jeux WHDLoad** : une archive `.lha` mise dans DF0: se lance seule (il faut un vrai Kickstart).
+- **Bibliothèque** : jeux WHDLoad, disquettes et disques durs déjà choisis, retrouvés d'un clic avec l'image du jeu
+  (onglets Jeux, Disquettes, Disques durs). Ajout par « Ajouter des fichiers… » ou en **glissant les fichiers depuis
+  le Finder** ; un Kickstart glissé est installé comme ROM de la machine.
+- **Jeux WHDLoad** : « ▶ Jouer » dans la Bibliothèque, ou une archive `.lha` mise dans DF0: (il faut un vrai Kickstart).
+- **Captures d'écran** (⌘K) : l'image du jeu dans la Bibliothèque, une copie dans Images/Amiga1200 ; un jeu sans image
+  en reçoit une quand on quitte.
 - **Fenêtre de l'émulation** (son propre processus) : un clic capture la souris, **⌥⌘** ou **F12** la libère.
   Les touches **⌘** sont les touches Amiga ; Help (ou Inser) = Help, Début/Fin = parenthèses du pavé.
 - **Manettes** (Game Controller : Xbox, PlayStation, MFi…) : la première joue sur le port joystick, la deuxième sur le
   port souris.
 - **Menu Amiga** : pause, sauvegarde et reprise rapides (⌘S, ⌘L), disquettes (⌘O), image nette ou lisse (⌘I), plein
-  écran (⌃⌘F), bruit des lecteurs, turbo, journal, réinitialisation (⌘R).
+  écran (⌃⌘F), capture d'écran (⌘K), bruit des lecteurs, turbo, journal, réinitialisation (⌘R).
 - **Son** par Core Audio, l'émulation cadencée par le son (comme la version Android) ; vitesse affichée dans le titre.
 
 Dossiers : réglages, ROM et sauvegardes dans `~/Library/Application Support/Amiga1200` ; volume SHARED: dans
