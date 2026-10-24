@@ -36,6 +36,11 @@ int amb_save_state(const char *path);
 int amb_load_state(const char *path);
 void amb_floppy_sound(int on);
 
+/* MIDI du port série : sortie et entrée ouvertes dans le cœur ; octets joués par l'Amiga, octets d'un clavier MIDI */
+void amb_midi_enable(int out, int in);
+unsigned amb_midi_read(uint8_t *dst, unsigned max);
+void amb_midi_write(const uint8_t *src, unsigned len);
+
 /* Images calculées et temps de calcul (µs) depuis le dernier appel */
 unsigned amb_frames(void);
 double amb_busy_us(void);

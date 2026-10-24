@@ -15,6 +15,8 @@ enum Core {
         amb_set_option("amiberry_crop_overscan", "enabled")
         amb_set_option("amiberry_statusline", "disabled")
         amb_set_option("amiberry_joyport_order", "21")
+        // MIDI du port série vers CoreMIDI (MidiLink)
+        amb_set_option("amiberry_midi_output", Settings.shared.midi ? "libretro" : "disabled")
         // Jeu WHDLoad dans une archive autre que .lha (dossier zippé, .lzx…) : le cœur la lance comme une .lha
         amb_set_option("amiberry_whdload_archive", ["zip", "7z", "lzx"].contains((content as NSString).pathExtension.lowercased()) ? "enabled" : "disabled")
         return amb_start(content) != 0
@@ -32,6 +34,9 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var view: EmuView!
     var paused = false, turbo = false
     var statsTimer: Timer?
+    var midi: MidiLink?
+    /// Quatre lecteurs de disquettes branchés (DF2: ou DF3: utilisés au démarrage)
+    let fourDrives = !Settings.shared.df2.isEmpty || !Settings.shared.df3.isEmpty
 
     init(content: String, resume: Bool = false) { self.content = content; self.resume = resume }
 
@@ -48,6 +53,7 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(view)
         NSApp.activate(ignoringOtherApps: true)
+        Gamepads.shared.keyMap = PadKeys.load(stateKey)
         Gamepads.shared.start()
         if !Core.start(content) { fail("le fil de l'émulation n'a pas pu démarrer"); return }
         let t0 = Date()
@@ -57,6 +63,11 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             case 2:
                 t.invalidate()
                 self.view.startDisplay()
+                if Settings.shared.midi {
+                    let m = MidiLink(); self.midi = m
+                    let msg = m.start(Settings.shared)
+                    amb_log(msg); self.flash(msg)
+                }
                 if self.resume {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                         let f = Settings.resumeFile
@@ -104,6 +115,7 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             else if let h = env["AMIGA1200_HDF"] { s.resumeGame = "hdf\n\(h)\n\(env["AMIGA1200_JEU"] ?? (h as NSString).lastPathComponent)" }
             else { s.resumeGame = "" }
         }
+        midi?.stop()
         amb_stop()
         usleep(200_000)   // écriture des disques
     }
@@ -129,13 +141,41 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         m.addItem(.separator())
         add("Disquette DF0:…", #selector(insertDF0), "o")
         add("Disquette DF1:…", #selector(insertDF1), "o", [.command, .shift])
-        add("Éjecter DF0:", #selector(ejectDF0), "")
+        if fourDrives {
+            add("Disquette DF2:…", #selector(insertDF2), "")
+            add("Disquette DF3:…", #selector(insertDF3), "")
+        }
+        let ej = NSMenu()
+        for i in 0..<(fourDrives ? 4 : 2) {
+            let it = NSMenuItem(title: "DF\(i):", action: #selector(eject(_:)), keyEquivalent: ""); it.tag = i; it.target = self; ej.addItem(it)
+        }
+        let ejItem = NSMenuItem(title: "Éjecter", action: nil, keyEquivalent: ""); ejItem.submenu = ej; m.addItem(ejItem)
+        add("Disquette vierge…", #selector(blankDisk), "n")
         m.addItem(.separator())
-        add("Image nette ou lisse", #selector(toggleSharp), "i")
+        // Image : filtre et pixels réguliers
+        let im = NSMenu()
+        for (i, t) in ["Lisse", "Nette (pixels francs)", "Écran cathodique (lignes de balayage)"].enumerated() {
+            let it = NSMenuItem(title: t, action: #selector(setFilter(_:)), keyEquivalent: ""); it.tag = i; it.target = self; im.addItem(it)
+        }
+        im.addItem(.separator())
+        let integer = NSMenuItem(title: "Pixels réguliers (agrandissement entier)", action: #selector(toggleInteger), keyEquivalent: ""); integer.target = self; im.addItem(integer)
+        let next = NSMenuItem(title: "Filtre suivant", action: #selector(nextFilter), keyEquivalent: "i"); next.target = self; im.addItem(next)
+        imageMenu = im
+        let imItem = NSMenuItem(title: "Image", action: nil, keyEquivalent: ""); imItem.submenu = im; m.addItem(imItem)
+        updateImageMenu()
         add("Plein écran", #selector(fullScreen), "f", [.command, .control])
         add("Capture d'écran", #selector(capture), "k")
         add("Bruit des lecteurs", #selector(toggleFloppySound), "")
         add("Turbo", #selector(toggleTurbo), "t")
+        add("Touches de la manette (ce jeu)…", #selector(editPadKeys), "")
+        m.addItem(.separator())
+        add("Quitter le jeu (touche de sortie de WHDLoad)", #selector(quitGame), ".")
+        let qk = NSMenu()
+        for (k, t) in EmuDelegate.quitKeys {
+            let it = NSMenuItem(title: t, action: #selector(setQuitKey(_:)), keyEquivalent: ""); it.tag = k; it.target = self
+            it.state = k == Settings.shared.quitKey ? .on : .off; qk.addItem(it)
+        }
+        let qkItem = NSMenuItem(title: "Touche de sortie", action: nil, keyEquivalent: ""); qkItem.submenu = qk; m.addItem(qkItem)
         add("Journal", #selector(openLog), "")
         m.addItem(.separator())
         add("Réinitialiser (redémarrage à froid)", #selector(restart), "r")
@@ -156,18 +196,71 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     @objc func insertDF0() { insert(0) }
     @objc func insertDF1() { insert(1) }
-    @objc func ejectDF0() { amb_insert_disk(0, ""); flash("DF0: éjectée") }
+    @objc func insertDF2() { insert(2) }
+    @objc func insertDF3() { insert(3) }
+    @objc func eject(_ i: NSMenuItem) { amb_insert_disk(Int32(i.tag), ""); Settings.shared.setFloppy(i.tag, ""); flash("DF\(i.tag): éjectée") }
+    /// Disquette formatée, pour les sauvegardes des jeux ou les données : créée puis mise dans DF1:
+    @objc func blankDisk() {
+        view.release()
+        let p = NSSavePanel()
+        p.message = "Disquette vierge formatée (880 Ko), mise dans DF1:"
+        p.nameFieldStringValue = "Sauvegardes.adf"
+        p.allowedFileTypes = ["adf"]
+        guard p.runModal() == .OK, let u = p.url else { return }
+        guard (try? BlankDisk.adf(u.deletingPathExtension().lastPathComponent).write(to: u)) != nil else { flash("Création de la disquette impossible"); return }
+        Library.add(u.path)
+        amb_insert_disk(1, u.path); Settings.shared.df1 = u.path
+        flash("DF1: \(u.lastPathComponent) (vierge)")
+    }
     func insert(_ drive: Int32) {
         view.release()
         let p = NSOpenPanel()
         p.message = "Disquette pour DF\(drive): (ADF, DMS, IPF…)"
         if p.runModal() == .OK, let u = p.url {
             amb_insert_disk(drive, u.path)
-            if drive == 0 { Settings.shared.df0 = u.path } else { Settings.shared.df1 = u.path }
+            Settings.shared.setFloppy(Int(drive), u.path)
             flash("DF\(drive): \(u.lastPathComponent)")
         }
     }
-    @objc func toggleSharp() { Settings.shared.sharp.toggle(); view.applyFilter() }
+    var imageMenu: NSMenu?
+    static let filterNames = ["image lisse", "image nette", "écran cathodique"]
+    @objc func setFilter(_ i: NSMenuItem) { applyFilter(i.tag) }
+    @objc func nextFilter() { applyFilter((Settings.shared.filter + 1) % 3) }
+    func applyFilter(_ f: Int) {
+        Settings.shared.filter = f
+        view.applyFilter(); updateImageMenu(); flash(EmuDelegate.filterNames[f])
+    }
+    @objc func toggleInteger() {
+        Settings.shared.integer.toggle()
+        view.applyFilter(); updateImageMenu()
+        flash(Settings.shared.integer ? "pixels réguliers" : "image à la taille de la fenêtre")
+    }
+    func updateImageMenu() {
+        for it in imageMenu?.items ?? [] {
+            if it.action == #selector(setFilter(_:)) { it.state = it.tag == Settings.shared.filter ? .on : .off }
+            if it.action == #selector(toggleInteger) { it.state = Settings.shared.integer ? .on : .off }
+        }
+    }
+    @objc func editPadKeys() {
+        view.release()
+        let g = stateKey
+        if let m = PadKeys.dialog(game: g, title: (g as NSString).deletingPathExtension) {
+            Gamepads.shared.keyMap = m
+            flash(m.isEmpty ? "manette par défaut" : "touches de la manette enregistrées pour ce jeu")
+        }
+    }
+    // Touche de sortie des jeux WHDLoad
+    static let quitKeys = [(291, "F10"), (268, "* du pavé numérique"), (27, "Échap")]
+    @objc func quitGame() {
+        let k = UInt32(Settings.shared.quitKey)
+        amb_key(1, k)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { amb_key(0, k) }
+        flash("touche de sortie : " + (EmuDelegate.quitKeys.first { $0.0 == Int(k) }?.1 ?? "?"))
+    }
+    @objc func setQuitKey(_ i: NSMenuItem) {
+        Settings.shared.quitKey = i.tag
+        for it in i.menu?.items ?? [] { it.state = it.tag == i.tag ? .on : .off }
+    }
     @objc func fullScreen() { window.toggleFullScreen(nil) }
     @objc func toggleFloppySound() {
         Settings.shared.floppySound.toggle(); amb_floppy_sound(Settings.shared.floppySound ? 1 : 0)
@@ -206,12 +299,19 @@ final class EmuView: NSView {
     private var buttons: Int32 = 0
     private var accX = 0.0, accY = 0.0
     private(set) var captured = false
+    /// Image de l'Amiga, et lignes de balayage par-dessus (écran cathodique)
+    private let screen = CALayer(), scan = CALayer()
+    private var imgW = 0, imgH = 0
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
         layer?.backgroundColor = NSColor.black.cgColor
-        layer?.contentsGravity = .resizeAspect
+        screen.contentsGravity = .resize
+        scan.contentsGravity = .resize
+        scan.magnificationFilter = .nearest
+        layer?.addSublayer(screen)
+        layer?.addSublayer(scan)
         applyFilter()
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -219,10 +319,44 @@ final class EmuView: NSView {
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    /// Filtre : lisse, net (pixels francs) ou écran cathodique (pixels francs et une ligne sur deux assombrie)
     func applyFilter() {
-        let f: CALayerContentsFilter = Settings.shared.sharp ? .nearest : .linear
-        layer?.magnificationFilter = f
-        layer?.minificationFilter = .linear
+        let f = Settings.shared.filter
+        screen.magnificationFilter = f == 0 ? .linear : .nearest
+        screen.minificationFilter = .linear
+        scan.isHidden = f != 2 || imgH == 0
+        if f == 2 && imgH > 0 { scan.contents = EmuView.scanlines(imgH) }
+        frameScreen()
+    }
+
+    /// Une colonne de pixels : une ligne sur deux assombrie de 35 %
+    private static func scanlines(_ h: Int) -> CGImage? {
+        guard let ctx = CGContext(data: nil, width: 1, height: h, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 0.35))
+        for y in stride(from: 0, to: h, by: 2) { ctx.fill(CGRect(x: 0, y: y, width: 1, height: 1)) }
+        return ctx.makeImage()
+    }
+
+    override func layout() { super.layout(); frameScreen() }
+
+    /// Image centrée aux proportions de l'Amiga ; pixels réguliers : le plus grand multiple entier qui tient dans la fenêtre
+    private func frameScreen() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        let b = bounds
+        guard imgW > 0, imgH > 0, b.width > 0, b.height > 0 else { screen.frame = b; scan.frame = b; return }
+        let iw = CGFloat(imgW), ih = CGFloat(imgH)
+        var w = b.width, h = b.width * ih / iw
+        if h > b.height { h = b.height; w = h * iw / ih }
+        if Settings.shared.integer {
+            let sf = window?.backingScaleFactor ?? 2
+            let k = floor(min(b.width * sf / iw, b.height * sf / ih))
+            if k >= 1 { w = iw * k / sf; h = ih * k / sf }
+        }
+        screen.frame = CGRect(x: ((b.width - w) / 2).rounded(), y: ((b.height - h) / 2).rounded(), width: w, height: h)
+        scan.frame = screen.frame
     }
 
     func startDisplay() {
@@ -245,8 +379,9 @@ final class EmuView: NSView {
         else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        layer?.contents = img
+        screen.contents = img
         CATransaction.commit()
+        if Int(w) != imgW || Int(h) != imgH { imgW = Int(w); imgH = Int(h); applyFilter() }
     }
 
     // ---------- souris : capturée d'un clic, libérée par ⌥⌘ ou F12 ----------
@@ -314,6 +449,9 @@ final class EmuView: NSView {
 final class Gamepads {
     static let shared = Gamepads()
     private var players: [ObjectIdentifier: Int32] = [:]
+    /// Boutons changés en touches du clavier pour le jeu en cours, et ceux qui tiennent leur touche enfoncée
+    var keyMap: [String: Int] = [:]
+    private var held: [ObjectIdentifier: Set<String>] = [:]
 
     func start() {
         NotificationCenter.default.addObserver(forName: .GCControllerDidConnect, object: nil, queue: .main) { [weak self] n in
@@ -327,8 +465,27 @@ final class Gamepads {
         if players[id] != nil { return }
         let player = Int32(min(players.count, 1))
         players[id] = player
-        c.extendedGamepad?.valueChangedHandler = { gp, _ in
+        c.extendedGamepad?.valueChangedHandler = { [weak self] gp, _ in
+            guard let self else { return }
             var m: UInt32 = 0
+            // Boutons réglés en touches du clavier : un appui, un relâchement
+            let pressed: [String: Bool] = [
+                "X": gp.buttonX.isPressed, "Y": gp.buttonY.isPressed, "L1": gp.leftShoulder.isPressed, "R1": gp.rightShoulder.isPressed,
+                "L2": gp.leftTrigger.isPressed, "R2": gp.rightTrigger.isPressed,
+                "L3": gp.leftThumbstickButton?.isPressed == true, "R3": gp.rightThumbstickButton?.isPressed == true,
+                "Menu": gp.buttonMenu.isPressed, "Options": gp.buttonOptions?.isPressed == true,
+            ]
+            var h = self.held[id] ?? []
+            for (b, k) in self.keyMap {
+                let down = pressed[b] == true
+                if down != h.contains(b) {
+                    amb_key(down ? 1 : 0, UInt32(k))
+                    if down { h.insert(b) } else { h.remove(b) }
+                }
+            }
+            for b in h where self.keyMap[b] == nil { h.remove(b) }
+            self.held[id] = h
+            func joy(_ b: String) -> Bool { self.keyMap[b] == nil && pressed[b] == true }
             let x = gp.leftThumbstick.xAxis.value, y = gp.leftThumbstick.yAxis.value
             if gp.dpad.up.isPressed || y > 0.5 { m |= 1 << 4 }
             if gp.dpad.down.isPressed || y < -0.5 { m |= 1 << 5 }
@@ -336,12 +493,12 @@ final class Gamepads {
             if gp.dpad.right.isPressed || x > 0.5 { m |= 1 << 7 }
             if gp.buttonA.isPressed { m |= 1 << 0 }        // tir
             if gp.buttonB.isPressed { m |= 1 << 8 }        // 2e bouton
-            if gp.buttonX.isPressed { m |= 1 << 1 }
-            if gp.buttonY.isPressed { m |= 1 << 9 }
-            if gp.leftShoulder.isPressed { m |= 1 << 10 }
-            if gp.rightShoulder.isPressed { m |= 1 << 11 }
-            if gp.buttonMenu.isPressed { m |= 1 << 3 }
-            if gp.buttonOptions?.isPressed == true { m |= 1 << 2 }
+            if joy("X") { m |= 1 << 1 }
+            if joy("Y") { m |= 1 << 9 }
+            if joy("L1") { m |= 1 << 10 }
+            if joy("R1") { m |= 1 << 11 }
+            if joy("Menu") { m |= 1 << 3 }
+            if joy("Options") { m |= 1 << 2 }
             amb_joy(player, m)
         }
     }

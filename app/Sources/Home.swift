@@ -9,6 +9,10 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
     var romLabel = NSTextField(labelWithString: "")
     var df0Label = NSTextField(labelWithString: "")
     var df1Label = NSTextField(labelWithString: "")
+    var df23Label = NSTextField(labelWithString: "")
+    var filterPopup = NSPopUpButton()
+    let midiBox = NSStackView()
+    var midiOutPopup = NSPopUpButton(), midiInPopup = NSPopUpButton()
     var cdLabel = NSTextField(labelWithString: "")
     let romList = NSStackView()
     var memPopups: [(NSPopUpButton, [Int], () -> Int, (Int) -> Void)] = []
@@ -32,7 +36,9 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
 
         let title = NSTextField(labelWithString: "Amiga 1200")
         title.font = .boldSystemFont(ofSize: 26); title.textColor = .systemOrange
-        col.addArrangedSubview(title)
+        col.addArrangedSubview(row([title,
+            button("✨ Assistant") { [self] in wizard() },
+            button("? Aide") { [self] in help() }]))
         summary.textColor = .secondaryLabelColor
         col.addArrangedSubview(summary)
 
@@ -71,6 +77,13 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
             button("Éjecter DF1:") { [self] in s.df1 = ""; refresh() },
         ]))
         col.addArrangedSubview(df1Label)
+        col.addArrangedSubview(row([
+            button("DF2:…") { [self] in if let p = pick("Disquette DF2:") { Library.add(p); s.df2 = p; refresh() } },
+            button("DF3:…") { [self] in if let p = pick("Disquette DF3:") { Library.add(p); s.df3 = p; refresh() } },
+            button("Éjecter DF2: et DF3:") { [self] in s.df2 = ""; s.df3 = ""; refresh() },
+            button("Disquette vierge…") { [self] in blankDisk() },
+        ]))
+        col.addArrangedSubview(df23Label)
         col.addArrangedSubview(row([cdLabel, button("Choisir un CD…") { [self] in if let p = pick("CD de la CD32 ou du CDTV (.iso, .chd, .cue)") { Library.add(p); s.cd = p; refresh() } }]))
         col.addArrangedSubview(hdLabel)
         col.addArrangedSubview(row([
@@ -88,7 +101,6 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         col.addArrangedSubview(check("Volume SHARED: (Documents/Amiga1200/SHARED)", { [self] in s.shared }) { [self] in s.shared = $0 })
         col.addArrangedSubview(check("NTSC 60 Hz (sinon PAL 50 Hz)", { [self] in s.ntsc }) { [self] in s.ntsc = $0 })
         col.addArrangedSubview(check("Bruit des lecteurs de disquettes", { [self] in s.floppySound }) { [self] in s.floppySound = $0 })
-        col.addArrangedSubview(check("Image nette (pixels francs)", { [self] in s.sharp }) { [self] in s.sharp = $0 })
         // Mémoire et processeur
         col.addArrangedSubview(row([NSTextField(labelWithString: "Chip"),
             memPopup(["Celle du modèle", "512 Ko", "1 Mo", "2 Mo"], [0, 1, 2, 4], { [self] in s.chip }) { [self] in s.chip = $0 },
@@ -100,6 +112,22 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         accelPopup.target = self; accelPopup.action = #selector(accelChanged)
         col.addArrangedSubview(row([NSTextField(labelWithString: "Sans JIT (A1200, A3000, A4000) :"), accelPopup]))
         col.addArrangedSubview(note("Un jeu qui affiche « Error code 103 » manque de mémoire ; certains vieux jeux A500 ne marchent qu'avec 512 Ko de Chip et sans Slow. Le JIT a déjà 64 Mo de Fast et un 68040."))
+
+        col.addArrangedSubview(section("🖥 Image"))
+        filterPopup.addItems(withTitles: ["Lisse", "Nette (pixels francs)", "Écran cathodique (lignes de balayage)"])
+        filterPopup.target = self; filterPopup.action = #selector(filterChanged)
+        col.addArrangedSubview(row([NSTextField(labelWithString: "Filtre :"), filterPopup]))
+        col.addArrangedSubview(check("Pixels réguliers : agrandissement en multiple entier (bandes noires autour)", { [self] in s.integer }) { [self] in s.integer = $0 })
+
+        col.addArrangedSubview(section("🎹 MIDI"))
+        col.addArrangedSubview(check("MIDI sur le port série de l'Amiga", { [self] in s.midi }) { [self] in s.midi = $0 })
+        midiBox.orientation = .vertical; midiBox.alignment = .leading; midiBox.spacing = 6
+        midiOutPopup.target = self; midiOutPopup.action = #selector(midiChanged)
+        midiInPopup.target = self; midiInPopup.action = #selector(midiChanged)
+        midiBox.addArrangedSubview(row([NSTextField(labelWithString: "Sortie :"), midiOutPopup]))
+        midiBox.addArrangedSubview(row([NSTextField(labelWithString: "Entrée :"), midiInPopup]))
+        col.addArrangedSubview(midiBox)
+        col.addArrangedSubview(note("L'Amiga joue sur un synthétiseur USB, Bluetooth ou réseau, ou sur une application de synthé (GarageBand ne reçoit pas le MIDI : prenez par exemple SimpleSynth ou un instrument virtuel) ; un clavier MIDI peut jouer sur l'Amiga (Bars & Pipes, Music-X, OctaMED…)."))
 
         let power = NSButton(title: "▶  Allumer l'Amiga", target: self, action: #selector(powerOn))
         power.bezelStyle = .rounded; power.controlSize = .large; power.keyEquivalent = "\r"
@@ -126,7 +154,7 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
             button("Importer…") { [self] in importBackup() },
         ]))
         col.addArrangedSubview(note("Un seul fichier .zip : réglages, Bibliothèque, configurations, Kickstart, sauvegardes d'état, sauvegardes des jeux (WHDLoad, SHARED:), disques extraits des archives et captures. Les jeux rangés ailleurs n'y sont pas : sur l'autre Mac, ajoutez-les à la Bibliothèque. Ce fichier contient vos Kickstart : ne le partagez pas."))
-        col.addArrangedSubview(note("Pendant le jeu : cliquez dans la fenêtre pour capturer la souris, ⌥⌘ ou F12 pour la libérer. ⌘ = touches Amiga. Menu Amiga : disquettes, sauvegarde rapide (⌘S / ⌘L), image, plein écran, réinitialisation."))
+        col.addArrangedSubview(note("Pendant le jeu : cliquez dans la fenêtre pour capturer la souris, ⌥⌘ ou F12 pour la libérer. ⌘ = touches Amiga. Menu Amiga : disquettes, sauvegarde rapide (⌘S / ⌘L), image, touches de la manette, quitter le jeu (⌘.), plein écran, réinitialisation. « ? Aide » en haut pour le détail."))
 
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
@@ -150,6 +178,11 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         refresh()
+        // Premier lancement : l'assistant
+        if !UserDefaults.standard.bool(forKey: "aideVue") {
+            UserDefaults.standard.set(true, forKey: "aideVue")
+            DispatchQueue.main.async { [self] in wizard() }
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
@@ -227,6 +260,20 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         }
         df0Label.stringValue = "DF0: " + (s.df0.isEmpty ? "vide" : (s.df0 as NSString).lastPathComponent)
         df1Label.stringValue = "DF1: " + (s.df1.isEmpty ? "vide" : (s.df1 as NSString).lastPathComponent)
+        df23Label.isHidden = s.df2.isEmpty && s.df3.isEmpty
+        df23Label.stringValue = "DF2: " + (s.df2.isEmpty ? "vide" : (s.df2 as NSString).lastPathComponent) +
+            "   DF3: " + (s.df3.isEmpty ? "vide" : (s.df3 as NSString).lastPathComponent)
+        filterPopup.selectItem(at: s.filter)
+        midiBox.isHidden = !s.midi
+        if s.midi {
+            func fill(_ p: NSPopUpButton, _ first: String, _ names: [String], _ cur: String) {
+                p.removeAllItems(); p.addItem(withTitle: first); p.addItems(withTitles: names)
+                if !cur.isEmpty && !names.contains(cur) { p.addItem(withTitle: cur + " (absent)") }
+                p.selectItem(at: cur.isEmpty ? 0 : (names.firstIndex(of: cur).map { $0 + 1 } ?? names.count + 1))
+            }
+            fill(midiOutPopup, "Premier appareil trouvé", MidiLink.names(output: true), s.midiOut)
+            fill(midiInPopup, "Aucune", MidiLink.names(output: false), s.midiIn)
+        }
         hdLabel.stringValue = s.hds.isEmpty ? "Disques durs : aucun" :
             "Disques durs :\n" + s.hds.enumerated().map { "DH\($0.offset): \(($0.element as NSString).lastPathComponent)" }.joined(separator: "\n")
         modelPopup.selectItem(withTitle: s.model)
@@ -274,6 +321,13 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         return p
     }
     @objc func memChanged(_ p: NSPopUpButton) { let m = memPopups[p.tag]; m.3(m.1[max(p.indexOfSelectedItem, 0)]); refresh() }
+    @objc func filterChanged() { s.filter = max(filterPopup.indexOfSelectedItem, 0) }
+    @objc func midiChanged() {
+        func value(_ p: NSPopUpButton) -> String {
+            p.indexOfSelectedItem <= 0 ? "" : (p.titleOfSelectedItem ?? "").replacingOccurrences(of: " (absent)", with: "")
+        }
+        s.midiOut = value(midiOutPopup); s.midiIn = value(midiInPopup)
+    }
     @objc func accelChanged() { s.accel = ["none", "030", "040"][max(accelPopup.indexOfSelectedItem, 0)]; refresh() }
     /// Préréglage « d'origine » : mémoire et processeur du modèle
     func stockMemory() { s.chip = 0; s.slow = -1; s.fast = 0; s.accel = "none" }
@@ -438,6 +492,15 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         // Le Workbench d'AGS démarre : placé en premier
         list.sort { a, b in ((a as NSString).lastPathComponent.lowercased() == "workbench.hdf" ? 0 : 1) < ((b as NSString).lastPathComponent.lowercased() == "workbench.hdf" ? 0 : 1) }
         s.hds = list
+        refresh()
+    }
+
+    /// Disquette formatée (880 Ko) pour les sauvegardes des jeux : rangée dans la Bibliothèque et mise dans DF1:
+    func blankDisk() {
+        guard let u = savePanel("Sauvegardes.adf", "adf") else { return }
+        guard (try? BlankDisk.adf(u.deletingPathExtension().lastPathComponent).write(to: u)) != nil else { alert("Disquette vierge", "Création impossible"); return }
+        Library.add(u.path); s.df1 = u.path
+        libKind = Library.floppy
         refresh()
     }
 

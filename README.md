@@ -5,9 +5,8 @@ Application Mac native de l'émulateur Amiga [amiga1200](https://github.com/laur
 [amiga1200-android](https://github.com/laurent-67370/amiga1200-android), compilé en code ARM64 avec le **JIT** : le
 68040 émulé est traduit en instructions du processeur du Mac.
 
-> **État : prototype.** Il vérifie que le cœur tourne sur Mac avec le JIT, avec l'image, le son, le clavier, la
-> souris et les manettes. Les fonctions de la version Android (Bibliothèque, sauvegardes avec miniatures, filtres…)
-> viendront ensuite, bloc par bloc.
+> **État : en essai.** Les fonctions de la version Android y sont (Bibliothèque, Kickstart multiples, sauvegardes
+> avec miniatures, reprise, filtres, MIDI, assistant…) ; l'application attend ses premiers essais sur un vrai Mac.
 
 ## Installer
 
@@ -19,11 +18,19 @@ Application Mac native de l'émulateur Amiga [amiga1200](https://github.com/laur
 
 Il faut macOS 13 ou plus récent, sur un Mac Apple Silicon.
 
-## Ce que fait le prototype
+## Ce que fait l'application
 
-- **Écran d'accueil** : préréglages (AGS / Workbench, A1200 d'origine, Amiga 500, CD32), disquettes DF0: et DF1:,
-  CD, jusqu'à **8 disques durs** (HDF, AGS compris), machine (**A500, A600, A1200, A3000, A4000, CD32, CDTV**), JIT,
-  carte graphique RTG, volume SHARED:, NTSC, bruit des lecteurs, image nette ou lisse.
+- **Assistant de premier lancement** (« ✨ Assistant ») : ce que l'on veut faire (WHDLoad, disquettes, AGS, CD,
+  découverte avec AROS), les Kickstart qu'il faut, les fichiers à ranger, puis le bouton qui lance ; « ? Aide » résume
+  tout.
+- **Écran d'accueil** : préréglages (AGS / Workbench, A1200 d'origine, Amiga 500, CD32), **quatre lecteurs** DF0: à
+  DF3:, **disquette vierge** formatée (pour les sauvegardes des jeux), CD, jusqu'à **8 disques durs** (HDF, AGS
+  compris), machine (**A500, A600, A1200, A3000, A4000, CD32, CDTV**), JIT, carte graphique RTG, volume SHARED:, NTSC,
+  bruit des lecteurs.
+- **Image** : lisse, nette (pixels francs) ou **écran cathodique** (lignes de balayage), et **pixels réguliers**
+  (agrandissement en multiple entier).
+- **MIDI** par CoreMIDI : l'Amiga joue sur un synthétiseur (USB, Bluetooth, réseau, application de synthé), un clavier
+  MIDI joue sur l'Amiga (Bars & Pipes, Music-X, OctaMED…).
 - **Mémoire et processeur** : Chip 512 Ko à 2 Mo, Slow, Fast jusqu'à 8 Mo, carte 68030 ou 68040 sans JIT (les vieux
   jeux qui veulent 512 Ko, ceux qui affichent « Error code 103 »…).
 - **Plusieurs Kickstart**, reconnus à leur contenu (somme CRC et version, 3.1.4 et 3.2 compris) : chacun sert
@@ -51,9 +58,11 @@ Il faut macOS 13 ou plus récent, sur un Mac Apple Silicon.
 - **Fenêtre de l'émulation** (son propre processus) : un clic capture la souris, **⌥⌘** ou **F12** la libère.
   Les touches **⌘** sont les touches Amiga ; Help (ou Inser) = Help, Début/Fin = parenthèses du pavé.
 - **Manettes** (Game Controller : Xbox, PlayStation, MFi…) : la première joue sur le port joystick, la deuxième sur le
-  port souris.
-- **Menu Amiga** : pause, sauvegarde et reprise rapides (⌘S, ⌘L), disquettes (⌘O), image nette ou lisse (⌘I), plein
-  écran (⌃⌘F), capture d'écran (⌘K), bruit des lecteurs, turbo (vraiment rapide, même avec le JIT), journal, réinitialisation (⌘R).
+  port souris ; **touches de la manette par jeu** (X, Y, L1, R1, L2, R2, Menu… changés en touches du clavier Amiga).
+- **Menu Amiga** : pause, sauvegarde et reprise rapides (⌘S, ⌘L), disquettes (⌘O, ⇧⌘O, DF2: et DF3:, éjection,
+  disquette vierge ⌘N), image (⌘I : filtre suivant), **quitter le jeu WHDLoad** (⌘. : F10, ou * ou Échap au choix),
+  plein écran (⌃⌘F), capture d'écran (⌘K), bruit des lecteurs, turbo (vraiment rapide, même avec le JIT), journal,
+  réinitialisation (⌘R).
 - **Son** par Core Audio, l'émulation cadencée par le son (comme la version Android) ; vitesse affichée dans le titre.
 
 Dossiers : réglages, ROM et sauvegardes dans `~/Library/Application Support/Amiga1200` ; volume SHARED: dans
