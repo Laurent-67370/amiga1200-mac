@@ -71,8 +71,11 @@ static void core_log(enum retro_log_level level, const char *fmt, ...) {
   log_line(buf);
 }
 static retro_environment_t real_env;
+static volatile int emu_turbo;
 static bool env_wrap(unsigned cmd, void *data) {
   if (cmd == RETRO_ENVIRONMENT_GET_LOG_INTERFACE) { ((struct retro_log_callback *)data)->log = core_log; return true; }
+  /* Turbo : le cœur passe en mode turbo (sans lui, avec le processeur « au maximum », chaque image dure une image réelle) */
+  if (cmd == RETRO_ENVIRONMENT_GET_FASTFORWARDING) { *(bool *)data = emu_turbo != 0; return true; }
   return real_env(cmd, data);
 }
 void amb_frontend_set_environment(retro_environment_t cb) {
@@ -189,7 +192,7 @@ void amb_mute_audio(int m) { audio_off = m; }
  * l'état du cœur depuis l'interface (sauvegardes d'état, disquettes) s'exécute dans ce fil, entre deux images. */
 static pthread_t emu_thr;
 static pthread_mutex_t emu_mtx = PTHREAD_MUTEX_INITIALIZER;
-static volatile int emu_state, emu_stop, emu_paused, emu_turbo;
+static volatile int emu_state, emu_stop, emu_paused;
 static char emu_path[2048];
 static volatile unsigned stat_frames;
 static volatile double stat_busy_us;

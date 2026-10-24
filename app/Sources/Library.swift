@@ -13,7 +13,9 @@ struct LibItem {
 }
 
 enum Library {
-    static let whd = "whd", floppy = "floppy", hdf = "hdf", rom = "rom"
+    static let whd = "whd", floppy = "floppy", hdf = "hdf", rom = "rom", cd = "cd"
+    /// Disque dur qui démarre WHDLoad tout seul (jeu installé sur un petit .hdf) : rangé avec les jeux
+    static let whdhdf = "whdhdf"
     private static let key = "bibliotheque"
 
     /// Type d'après le nom : un Kickstart n'est jamais rangé, il est installé comme ROM de la machine
@@ -24,6 +26,7 @@ enum Library {
         switch ext {
         case "lha", "lzh", "lzx": return whd
         case "hdf", "hdz", "vhd": return hdf
+        case "iso", "chd", "cue", "ccd", "nrg", "mds": return cd
         case "adf", "adz", "dms", "ipf", "fdi", "scp", "zip", "gz", "7z", "exe": return floppy
         default: return nil
         }
@@ -41,12 +44,14 @@ enum Library {
         UserDefaults.standard.set(items.map { ["path": $0.path, "kind": $0.kind, "added": $0.added, "used": $0.used] }, forKey: key)
     }
 
-    /// Ajouté (ou rafraîchi) ; faux si le type n'est pas reconnu (ou si c'est un Kickstart)
+    /// Ajouté (ou rafraîchi) ; le type vient de l'extension, sauf s'il est donné (contenu analysé) ; faux si le type
+    /// n'est pas reconnu (ou si c'est un Kickstart)
     @discardableResult
-    static func add(_ path: String) -> Bool {
-        guard let k = kind(path), k != rom else { return false }
+    static func add(_ path: String, kind given: String? = nil) -> Bool {
         var list = all()
         let old = list.first { $0.path == path }
+        // Un élément déjà rangé garde son type (un .hdf reconnu comme jeu WHDLoad le reste)
+        guard let k = given ?? old?.kind ?? kind(path), k != rom else { return false }
         list.removeAll { $0.path == path }
         list.append(LibItem(path: path, kind: k, added: old?.added ?? Date().timeIntervalSince1970, used: old?.used ?? 0))
         save(list)
