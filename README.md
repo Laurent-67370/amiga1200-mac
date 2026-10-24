@@ -21,13 +21,23 @@ Il faut macOS 13 ou plus récent, sur un Mac Apple Silicon.
 
 ## Ce que fait le prototype
 
-- **Écran d'accueil** : préréglages (AGS / Workbench, A1200 d'origine, Amiga 500), Kickstart (le vôtre, sinon la ROM
-  libre **AROS** fournie), disquettes DF0: et DF1:, jusqu'à **8 disques durs** (HDF, AGS compris), machine (A500, A600,
-  A1200, A4000), JIT, carte graphique RTG, volume SHARED:, NTSC, bruit des lecteurs, image nette ou lisse.
-- **Bibliothèque** : jeux WHDLoad, disquettes et disques durs déjà choisis, retrouvés d'un clic avec l'image du jeu
-  (onglets Jeux, Disquettes, Disques durs). Ajout par « Ajouter des fichiers… » ou en **glissant les fichiers depuis
-  le Finder** ; un Kickstart glissé est installé comme ROM de la machine.
-- **Jeux WHDLoad** : « ▶ Jouer » dans la Bibliothèque, ou une archive `.lha` mise dans DF0: (il faut un vrai Kickstart).
+- **Écran d'accueil** : préréglages (AGS / Workbench, A1200 d'origine, Amiga 500, CD32), disquettes DF0: et DF1:,
+  CD, jusqu'à **8 disques durs** (HDF, AGS compris), machine (**A500, A600, A1200, A3000, A4000, CD32, CDTV**), JIT,
+  carte graphique RTG, volume SHARED:, NTSC, bruit des lecteurs, image nette ou lisse.
+- **Mémoire et processeur** : Chip 512 Ko à 2 Mo, Slow, Fast jusqu'à 8 Mo, carte 68030 ou 68040 sans JIT (les vieux
+  jeux qui veulent 512 Ko, ceux qui affichent « Error code 103 »…).
+- **Plusieurs Kickstart**, reconnus à leur contenu (somme CRC et version, 3.1.4 et 3.2 compris) : chacun sert
+  automatiquement à la machine qui lui convient (1.3 pour l'Amiga 500 et le CDTV, 3.1 pour l'A1200…). Sinon, la ROM
+  libre **AROS** fournie. La ROM de la CD32 et l'extension du CDTV s'ajoutent de la même façon.
+- **Bibliothèque** : jeux WHDLoad, disquettes, disques durs et CD déjà choisis, retrouvés d'un clic avec l'image du jeu.
+  Ajout par « Ajouter des fichiers… » ou en **glissant les fichiers depuis le Finder**. Les **.zip sont analysés** :
+  un disque dur ou un jeu WHDLoad zippé est extrait (Application Support/Amiga1200/Disques), une archive abîmée est
+  signalée, une disquette zippée reste lue telle quelle.
+- **Jeux WHDLoad** : « ▶ Jouer » pour une archive `.lha`, `.lzx` ou le dossier d'un jeu zippé, et pour un **jeu
+  installé sur un .hdf** qui démarre WHDLoad tout seul (A1200, Kickstart 3.x, 8 Mo de Fast ; vos Kickstart lui sont
+  donnés dans `WHDCommon:Kickstarts`). Il faut un vrai Kickstart.
+- **Disques durs** : un .hdf sans table de partitions reçoit sa géométrie ; une disquette démarrée avec un Kickstart
+  1.x laisse les disques durs débranchés, pour laisser sa mémoire au jeu.
 - **Captures d'écran** (⌘K) : l'image du jeu dans la Bibliothèque, une copie dans Images/Amiga1200 ; un jeu sans image
   en reçoit une quand on quitte.
 - **Fenêtre de l'émulation** (son propre processus) : un clic capture la souris, **⌥⌘** ou **F12** la libère.
@@ -35,7 +45,7 @@ Il faut macOS 13 ou plus récent, sur un Mac Apple Silicon.
 - **Manettes** (Game Controller : Xbox, PlayStation, MFi…) : la première joue sur le port joystick, la deuxième sur le
   port souris.
 - **Menu Amiga** : pause, sauvegarde et reprise rapides (⌘S, ⌘L), disquettes (⌘O), image nette ou lisse (⌘I), plein
-  écran (⌃⌘F), capture d'écran (⌘K), bruit des lecteurs, turbo, journal, réinitialisation (⌘R).
+  écran (⌃⌘F), capture d'écran (⌘K), bruit des lecteurs, turbo (vraiment rapide, même avec le JIT), journal, réinitialisation (⌘R).
 - **Son** par Core Audio, l'émulation cadencée par le son (comme la version Android) ; vitesse affichée dans le titre.
 
 Dossiers : réglages, ROM et sauvegardes dans `~/Library/Application Support/Amiga1200` ; volume SHARED: dans

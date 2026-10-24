@@ -9,10 +9,15 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
     var romLabel = NSTextField(labelWithString: "")
     var df0Label = NSTextField(labelWithString: "")
     var df1Label = NSTextField(labelWithString: "")
+    var cdLabel = NSTextField(labelWithString: "")
+    let romList = NSStackView()
+    var memPopups: [(NSPopUpButton, [Int], () -> Int, (Int) -> Void)] = []
+    var accelPopup = NSPopUpButton()
     var hdLabel = NSTextField(wrappingLabelWithString: "")
     var modelPopup = NSPopUpButton()
     var checks: [(NSButton, () -> Bool)] = []
-    let libTabs = NSSegmentedControl(labels: ["🎮 Jeux WHDLoad", "💾 Disquettes", "🗄 Disques durs"], trackingMode: .selectOne, target: nil, action: nil)
+    static let tabNames = ["🎮 Jeux", "💾 Disquettes", "🗄 Disques durs", "💿 CD"]
+    let libTabs = NSSegmentedControl(labels: HomeDelegate.tabNames, trackingMode: .selectOne, target: nil, action: nil)
     let libList = NSStackView()
     var libKind = Library.whd
 
@@ -32,8 +37,9 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         col.addArrangedSubview(section("⚡ Préréglages"))
         col.addArrangedSubview(row([
             button("AGS / Workbench") { [self] in s.model = "A1200"; s.jit = true; s.rtg = true; refresh() },
-            button("A1200 d'origine") { [self] in s.model = "A1200"; s.jit = false; s.rtg = false; refresh() },
-            button("Amiga 500") { [self] in s.model = "A500"; s.jit = false; s.rtg = false; refresh() },
+            button("A1200 d'origine") { [self] in s.model = "A1200"; s.jit = false; s.rtg = false; stockMemory(); refresh() },
+            button("Amiga 500") { [self] in s.model = "A500"; s.jit = false; s.rtg = false; stockMemory(); refresh() },
+            button("CD32") { [self] in s.model = "CD32"; refresh() },
         ]))
 
         col.addArrangedSubview(section("📚 Bibliothèque"))
@@ -41,15 +47,18 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         col.addArrangedSubview(libTabs)
         libList.orientation = .vertical; libList.alignment = .leading; libList.spacing = 4
         col.addArrangedSubview(libList)
-        col.addArrangedSubview(row([button("Ajouter des fichiers…") { [self] in addFiles(pickMany("Jeux WHDLoad (.lha), disquettes, disques durs (.hdf) ou Kickstart", multiple: true)) }]))
-        col.addArrangedSubview(note("Glissez aussi vos fichiers sur cette fenêtre depuis le Finder. Un jeu WHDLoad se lance d'un clic ; un Kickstart glissé ici est installé comme ROM de la machine."))
+        col.addArrangedSubview(row([button("Ajouter des fichiers…") { [self] in addFiles(pickMany("Jeux WHDLoad (.lha, .zip), disquettes, disques durs (.hdf), CD ou Kickstart", multiple: true)) }]))
+        col.addArrangedSubview(note("Glissez aussi vos fichiers sur cette fenêtre depuis le Finder. Un jeu WHDLoad se lance d'un clic ; les .zip sont analysés (disque dur ou jeu WHDLoad extraits, archive abîmée signalée) ; un Kickstart est installé comme ROM de la machine."))
 
         col.addArrangedSubview(section("🔑 Kickstart"))
         col.addArrangedSubview(romLabel)
+        romList.orientation = .vertical; romList.alignment = .leading; romList.spacing = 2
+        col.addArrangedSubview(romList)
         col.addArrangedSubview(row([
-            button("Choisir un fichier…") { [self] in chooseRom() },
-            button("AROS (libre)") { [self] in s.rom = "aros"; refresh() },
+            button("Ajouter des Kickstart…") { [self] in for p in pickMany("Kickstart (fichiers ROM : 1.3 pour l'A500, 3.1 pour l'A1200, ROM de la CD32, extension du CDTV…)", multiple: true) { installRom(p) } },
+            button("AROS / mes Kickstart") { [self] in s.rom = s.rom == "aros" ? "user" : "aros"; refresh() },
         ]))
+        col.addArrangedSubview(note("Installez-en plusieurs : chacun sert à la machine qui lui convient, reconnu à son contenu (1.3 pour l'Amiga 500, 3.1 pour l'A1200, 3.1.4 et 3.2 compris). La ROM de la CD32 et l'extension du CDTV s'ajoutent de la même façon."))
 
         col.addArrangedSubview(section("💾 Disques"))
         col.addArrangedSubview(df0Label)
@@ -60,6 +69,7 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
             button("Éjecter DF1:") { [self] in s.df1 = ""; refresh() },
         ]))
         col.addArrangedSubview(df1Label)
+        col.addArrangedSubview(row([cdLabel, button("Choisir un CD…") { [self] in if let p = pick("CD de la CD32 ou du CDTV (.iso, .chd, .cue)") { Library.add(p); s.cd = p; refresh() } }]))
         col.addArrangedSubview(hdLabel)
         col.addArrangedSubview(row([
             button("Ajouter des disques durs…") { [self] in addHds() },
@@ -68,15 +78,26 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         col.addArrangedSubview(note("Un jeu WHDLoad (.lha) mis dans DF0: se lance seul. Pour AGS, ajoutez tous ses .hdf d'un coup (Workbench.hdf passe en premier)."))
 
         col.addArrangedSubview(section("⚙️ Machine"))
-        modelPopup.addItems(withTitles: ["A500", "A600", "A1200", "A4000"])
+        modelPopup.addItems(withTitles: ["A500", "A600", "A1200", "A3000", "A4000", "CD32", "CDTV"])
         modelPopup.target = self; modelPopup.action = #selector(modelChanged)
         col.addArrangedSubview(modelPopup)
-        col.addArrangedSubview(check("JIT 68040 : beaucoup plus rapide (A1200, A4000)", { [self] in s.jit }) { [self] in s.jit = $0 })
+        col.addArrangedSubview(check("JIT 68040 : beaucoup plus rapide (A1200, A3000, A4000)", { [self] in s.jit }) { [self] in s.jit = $0 })
         col.addArrangedSubview(check("Carte graphique RTG : haute résolution d'AGS et du Workbench", { [self] in s.rtg }) { [self] in s.rtg = $0 })
         col.addArrangedSubview(check("Volume SHARED: (Documents/Amiga1200/SHARED)", { [self] in s.shared }) { [self] in s.shared = $0 })
         col.addArrangedSubview(check("NTSC 60 Hz (sinon PAL 50 Hz)", { [self] in s.ntsc }) { [self] in s.ntsc = $0 })
         col.addArrangedSubview(check("Bruit des lecteurs de disquettes", { [self] in s.floppySound }) { [self] in s.floppySound = $0 })
         col.addArrangedSubview(check("Image nette (pixels francs)", { [self] in s.sharp }) { [self] in s.sharp = $0 })
+        // Mémoire et processeur
+        col.addArrangedSubview(row([NSTextField(labelWithString: "Chip"),
+            memPopup(["Celle du modèle", "512 Ko", "1 Mo", "2 Mo"], [0, 1, 2, 4], { [self] in s.chip }) { [self] in s.chip = $0 },
+            NSTextField(labelWithString: "Slow"),
+            memPopup(["Celle du modèle", "Aucune", "512 Ko", "1 Mo"], [-1, 0, 2, 4], { [self] in s.slow }) { [self] in s.slow = $0 },
+            NSTextField(labelWithString: "Fast"),
+            memPopup(["Aucune", "2 Mo", "4 Mo", "8 Mo"], [0, 2, 4, 8], { [self] in s.fast }) { [self] in s.fast = $0 }]))
+        accelPopup.addItems(withTitles: ["Processeur du modèle", "Carte 68030 + FPU 68882", "Carte 68040"])
+        accelPopup.target = self; accelPopup.action = #selector(accelChanged)
+        col.addArrangedSubview(row([NSTextField(labelWithString: "Sans JIT (A1200, A3000, A4000) :"), accelPopup]))
+        col.addArrangedSubview(note("Un jeu qui affiche « Error code 103 » manque de mémoire ; certains vieux jeux A500 ne marchent qu'avec 512 Ko de Chip et sans Slow. Le JIT a déjà 64 Mo de Fast et un 68040."))
 
         let power = NSButton(title: "▶  Allumer l'Amiga", target: self, action: #selector(powerOn))
         power.bezelStyle = .rounded; power.controlSize = .large; power.keyEquivalent = "\r"
@@ -125,15 +146,40 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
     }
 
     func refresh() {
-        let big = Settings.bigBox(s.model)
-        var parts = ["Amiga \(s.model.dropFirst())"]
-        if big { parts.append(s.jit ? "68040 JIT" : s.model == "A1200" ? "68020" : "68030") }
+        let big = Settings.bigBox(s.model), console = Settings.cdConsole(s.model)
+        var parts = [console ? s.model : "Amiga \(s.model.dropFirst())"]
+        if big { parts.append(s.jit ? "68040 JIT" : s.accel == "030" ? "68030" : s.accel == "040" ? "68040" : s.model == "A1200" ? "68020" : "68030") }
         if big && s.rtg { parts.append("RTG") }
-        parts.append(s.userRom ? "Kickstart \((s.romName as NSString).deletingPathExtension)" : "AROS")
-        if !s.hds.isEmpty { parts.append("\(s.hds.count) disque\(s.hds.count > 1 ? "s" : "") dur\(s.hds.count > 1 ? "s" : "")") }
-        if !s.df0.isEmpty { parts.append((Settings.isWhd(s.df0) ? "WHDLoad : " : "DF0: ") + (s.df0 as NSString).lastPathComponent) }
+        let kick = s.kick(s.model)
+        if s.model == "CD32" { parts.append(Kickstarts.cd32Rom ? "ROM CD32" : "ROM CD32 manquante") }
+        else if s.model == "CDTV" { parts.append(cdtvReady ? "Kickstart + extension CDTV" : "ROM du CDTV manquante") }
+        else { parts.append(kick.map { $0.label.components(separatedBy: " (").first ?? $0.label } ?? "AROS") }
+        if !console {
+            let mem = [[1: "512 Ko Chip", 2: "1 Mo Chip", 4: "2 Mo Chip"][s.chip], s.fast > 0 && !(s.jit && big) ? "\(s.fast) Mo Fast" : nil].compactMap { $0 }
+            if !mem.isEmpty { parts.append(mem.joined(separator: " + ")) }
+            if !s.hds.isEmpty { parts.append("\(s.hds.count) disque\(s.hds.count > 1 ? "s" : "") dur\(s.hds.count > 1 ? "s" : "")") }
+            if !s.df0.isEmpty { parts.append((Settings.isWhd(s.df0) ? "WHDLoad : " : "DF0: ") + (s.df0 as NSString).lastPathComponent) }
+        } else { parts.append(s.cd.isEmpty ? "sans CD" : "CD : " + (s.cd as NSString).lastPathComponent) }
         summary.stringValue = parts.joined(separator: " · ")
-        romLabel.stringValue = s.userRom ? "✓ \(s.romName)" : "AROS, ROM libre fournie. Pour les jeux, WHDLoad et AGS, choisissez votre Kickstart 3.1."
+        let roms = Kickstarts.list()
+        let name = s.model == "A500" ? "l'Amiga 500" : "l'\(s.model)"
+        romLabel.stringValue = s.model == "CD32" ? (Kickstarts.cd32Rom ? "CD32 : ✓ ROM de la console" : "La CD32 a besoin de sa ROM (kick40060.CD32 + extension, ou ROM complète de 1 Mo).")
+            : s.model == "CDTV" ? (cdtvReady ? "CDTV : ✓ Kickstart et extension" : "Le CDTV a besoin d'un Kickstart 1.3 et de son extension (ROM de 256 Ko).")
+            : kick != nil ? "Pour \(name) : \(kick!.label)"
+            : s.rom == "aros" && !roms.isEmpty ? "AROS (ROM libre) choisi à la place de vos Kickstart."
+            : !roms.isEmpty ? "⚠ Aucun de vos Kickstart ne convient à \(name) : AROS démarre à sa place."
+            : "AROS, ROM libre fournie. Pour les jeux, WHDLoad et AGS, ajoutez vos Kickstart : 3.1 pour l'A1200, 1.3 pour l'Amiga 500."
+        romList.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for r in roms {
+            let l = NSTextField(labelWithString: (r.path == kick?.path ? "✓ " : "• ") + r.label)
+            l.translatesAutoresizingMaskIntoConstraints = false
+            l.widthAnchor.constraint(equalToConstant: 420).isActive = true
+            romList.addArrangedSubview(row([l, ClosureButton("✕") { [self] in Kickstarts.remove(r); refresh() }]))
+        }
+        if Kickstarts.cd32Rom { romList.addArrangedSubview(NSTextField(labelWithString: "• ROM de la CD32" + (FileManager.default.fileExists(atPath: Paths.sys.appendingPathComponent("cd32ext.rom").path) ? " et son extension" : ""))) }
+        cdLabel.stringValue = "CD : " + (s.cd.isEmpty ? "aucun" : (s.cd as NSString).lastPathComponent)
+        for (p, values, get, _) in memPopups { p.selectItem(at: values.firstIndex(of: get()) ?? 0) }
+        accelPopup.selectItem(at: ["none", "030", "040"].firstIndex(of: s.accel) ?? 0)
         df0Label.stringValue = "DF0: " + (s.df0.isEmpty ? "vide" : (s.df0 as NSString).lastPathComponent)
         df1Label.stringValue = "DF1: " + (s.df1.isEmpty ? "vide" : (s.df1 as NSString).lastPathComponent)
         hdLabel.stringValue = s.hds.isEmpty ? "Disques durs : aucun" :
@@ -174,22 +220,39 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         return l
     }
 
+    func memPopup(_ titles: [String], _ values: [Int], _ get: @escaping () -> Int, _ set: @escaping (Int) -> Void) -> NSPopUpButton {
+        let p = NSPopUpButton()
+        p.addItems(withTitles: titles)
+        p.tag = memPopups.count
+        p.target = self; p.action = #selector(memChanged(_:))
+        memPopups.append((p, values, get, set))
+        return p
+    }
+    @objc func memChanged(_ p: NSPopUpButton) { let m = memPopups[p.tag]; m.3(m.1[max(p.indexOfSelectedItem, 0)]); refresh() }
+    @objc func accelChanged() { s.accel = ["none", "030", "040"][max(accelPopup.indexOfSelectedItem, 0)]; refresh() }
+    /// Préréglage « d'origine » : mémoire et processeur du modèle
+    func stockMemory() { s.chip = 0; s.slow = -1; s.fast = 0; s.accel = "none" }
+    var cdtvReady: Bool { Kickstarts.cdtvExt() != nil && Kickstarts.best("CDTV") != nil }
+
     // ---------- Bibliothèque ----------
-    @objc func libTab() { libKind = [Library.whd, Library.floppy, Library.hdf][max(libTabs.selectedSegment, 0)]; refreshLibrary() }
+    static let tabKinds = [Library.whd, Library.floppy, Library.hdf, Library.cd]
+    @objc func libTab() { libKind = HomeDelegate.tabKinds[max(libTabs.selectedSegment, 0)]; refreshLibrary() }
 
     func refreshLibrary() {
-        let kinds = [Library.whd, Library.floppy, Library.hdf]
+        let kinds = HomeDelegate.tabKinds
         let items = Library.all()
+        func inTab(_ it: LibItem, _ k: String) -> Bool { it.kind == k || (k == Library.whd && it.kind == Library.whdhdf) }
         for (i, k) in kinds.enumerated() {
-            let n = items.filter { $0.kind == k }.count
-            libTabs.setLabel(["🎮 Jeux WHDLoad", "💾 Disquettes", "🗄 Disques durs"][i] + (n > 0 ? " (\(n))" : ""), forSegment: i)
+            let n = items.filter { inTab($0, k) }.count
+            libTabs.setLabel(HomeDelegate.tabNames[i] + (n > 0 ? " (\(n))" : ""), forSegment: i)
         }
         libTabs.selectedSegment = kinds.firstIndex(of: libKind) ?? 0
         libList.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let shown = items.filter { $0.kind == libKind }
+        let shown = items.filter { inTab($0, libKind) }
         if shown.isEmpty {
-            libList.addArrangedSubview(note(libKind == Library.whd ? "Aucun jeu. Ajoutez des archives WHDLoad (.lha) : un clic les lance, sans disque dur à préparer."
-                : libKind == Library.floppy ? "Aucune disquette (ADF, DMS, IPF…)." : "Aucun disque dur (.hdf)."))
+            libList.addArrangedSubview(note(libKind == Library.whd ? "Aucun jeu. Ajoutez des archives WHDLoad (.lha, .zip) ou des jeux WHDLoad sur .hdf : un clic les lance."
+                : libKind == Library.floppy ? "Aucune disquette (ADF, DMS, IPF…)."
+                : libKind == Library.cd ? "Aucun CD de CD32 ou de CDTV (.iso, .chd, .cue)." : "Aucun disque dur (.hdf)."))
             return
         }
         for it in shown {
@@ -210,6 +273,11 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
             switch it.kind {
             case Library.whd:
                 views.append(ClosureButton("▶ Jouer") { [self] in playWhd(it) })
+            case Library.whdhdf:
+                views.append(ClosureButton("▶ Jouer") { [self] in playWhdHdf(it) })
+            case Library.cd:
+                if Kickstarts.cdtvExt() != nil { views.append(ClosureButton("▶ CDTV") { [self] in playCd(it, "CDTV") }) }
+                views.append(ClosureButton("▶ CD32") { [self] in playCd(it, "CD32") })
             case Library.floppy:
                 views.append(ClosureButton("▶ Jouer") { [self] in Library.touch(it.path); s.df0 = it.path; refresh(); powerOn() })
                 views.append(ClosureButton("DF0:") { [self] in Library.touch(it.path); s.df0 = it.path; refresh() })
@@ -229,19 +297,70 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
     /// Fichiers choisis ou glissés : un Kickstart est installé, le reste rangé dans la Bibliothèque
     func addFiles(_ paths: [String]) {
         var added = 0, last: String?
+        var zips: [String] = [], hdfs: [String] = []
         for p in paths {
             if Library.kind(p) == Library.rom { installRom(p); continue }
-            if Library.add(p) { added += 1; last = Library.kind(p) }
+            // Archive .zip : son contenu décide (disque dur, jeu WHDLoad ou disquette)
+            if (p as NSString).pathExtension.lowercased() == "zip" { zips.append(p); added += 1; continue }
+            if Library.add(p) { added += 1; last = Library.kind(p); if last == Library.hdf { hdfs.append(p) } }
         }
         if let k = last { libKind = k }
         if paths.count > 0 && added == 0 && !paths.contains(where: { Library.kind($0) == Library.rom }) {
-            alert("Fichiers non reconnus", "La Bibliothèque accepte les jeux WHDLoad (.lha), les disquettes (ADF, DMS, IPF…) et les disques durs (.hdf).")
+            alert("Fichiers non reconnus", "La Bibliothèque accepte les jeux WHDLoad (.lha, .zip), les disquettes (ADF, DMS, IPF…), les disques durs (.hdf) et les CD.")
         }
         refresh()
+        if zips.isEmpty && hdfs.isEmpty { return }
+        // Analyse à part (les archives et les disques peuvent être gros)
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            let results = zips.map { ($0, ZipImport.inspect($0)) }
+            let games = hdfs.filter { ZipImport.bootsWhdload($0) }
+            DispatchQueue.main.async { [self] in
+                var notes: [String] = []
+                for g in games { Library.add(g, kind: Library.whdhdf); notes.append("\((g as NSString).lastPathComponent) : jeu WHDLoad sur disque dur, rangé dans Jeux (▶ Jouer)"); libKind = Library.whd }
+                for (z, r) in results {
+                    let n = (z as NSString).lastPathComponent
+                    for f in r.found {
+                        Library.add(f.path, kind: f.kind)
+                        notes.append((f.path as NSString).lastPathComponent + (f.kind == Library.whdhdf ? " : jeu WHDLoad sur disque dur, rangé dans Jeux (▶ Jouer)"
+                            : f.kind == Library.whd ? " : jeu WHDLoad, rangé dans Jeux" : " : disque dur, rangé dans Disques durs"))
+                        libKind = f.kind == Library.hdf ? Library.hdf : Library.whd
+                    }
+                    if r.whdArchive { Library.add(z, kind: Library.whd); notes.append("\(n) : jeu WHDLoad, rangé dans Jeux (▶ Jouer)"); libKind = Library.whd }
+                    if let p = r.problem { notes.append(p) }
+                    if r.found.isEmpty && r.problem == nil && !r.whdArchive { Library.add(z, kind: Library.floppy); libKind = Library.floppy }
+                }
+                refresh()
+                if !notes.isEmpty { alert("Fichiers ajoutés", notes.joined(separator: "\n\n")) }
+            }
+        }
+    }
+
+    /// Jeu installé sur un .hdf qui démarre WHDLoad tout seul : un A1200 avec Kickstart 3.x et 8 Mo de Fast, ce seul disque
+    func playWhdHdf(_ it: LibItem) {
+        guard Kickstarts.hasForWhd() else {
+            alert("Kickstart nécessaire", "WHDLoad a besoin d'un vrai Kickstart (3.1 de l'A1200 de préférence) : AROS ne lui suffit pas.")
+            return
+        }
+        Library.touch(it.path)
+        launch(Config.write(s, whdHdf: it.path).path, game: it.name)
+    }
+
+    /// CD de la CD32 ou du CDTV : la console démarre dessus (il lui faut ses ROM)
+    func playCd(_ it: LibItem, _ console: String) {
+        if console == "CD32" && !Kickstarts.cd32Rom {
+            alert("ROM de la CD32 nécessaire", "La CD32 démarre sur sa propre ROM : ajoutez kick40060.CD32 (puis son extension), ou une ROM complète de 1 Mo, avec « Ajouter des Kickstart… »."); return
+        }
+        if console == "CDTV" && !cdtvReady {
+            alert("ROM du CDTV nécessaires", "Le CDTV démarre sur un Kickstart 1.3 et sur son extension (ROM de 256 Ko) : ajoutez-les avec « Ajouter des Kickstart… »."); return
+        }
+        Library.touch(it.path)
+        s.cd = it.path; s.model = console
+        refresh()
+        powerOn()
     }
 
     func playWhd(_ it: LibItem) {
-        guard s.userRom else {
+        guard Kickstarts.hasForWhd() else {
             alert("Kickstart nécessaire", "WHDLoad a besoin d'un vrai Kickstart (3.1 de l'A1200 de préférence) : AROS ne lui suffit pas.")
             return
         }
@@ -260,19 +379,11 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         return p.runModal() == .OK ? p.urls.map(\.path) : []
     }
 
-    func chooseRom() {
-        guard let p = pick("Kickstart (fichier ROM, 3.1 pour l'A1200)") else { return }
-        installRom(p)
-    }
-
+    /// Kickstart ajouté aux autres (reconnu à son contenu), choisi ensuite selon la machine
     func installRom(_ p: String) {
-        do {
-            try? FileManager.default.removeItem(at: Paths.kick)
-            try FileManager.default.copyItem(atPath: p, toPath: Paths.kick.path)
-            s.rom = "user"; s.romName = (p as NSString).lastPathComponent
-        } catch {
-            alert("Lecture du Kickstart impossible", error.localizedDescription)
-        }
+        let (rom, why) = Kickstarts.install(p)
+        if rom == nil { alert("Kickstart refusé", "\((p as NSString).lastPathComponent) : \(why ?? "")") }
+        else { s.rom = "user" }
         refresh()
     }
 
@@ -291,7 +402,13 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
 
     /// L'émulation dans un nouveau processus de cette application (le cœur ne se rallume pas dans le même)
     @objc func powerOn() {
-        if Settings.isWhd(s.df0) && !s.userRom {
+        if s.model == "CD32" && !Kickstarts.cd32Rom {
+            alert("ROM de la CD32 nécessaire", "La CD32 démarre sur sa propre ROM : ajoutez kick40060.CD32 (puis son extension), ou une ROM complète de 1 Mo."); return
+        }
+        if s.model == "CDTV" && !cdtvReady {
+            alert("ROM du CDTV nécessaires", "Le CDTV démarre sur un Kickstart 1.3 et sur son extension (ROM de 256 Ko)."); return
+        }
+        if Settings.isWhd(s.df0) && !Kickstarts.hasForWhd() {
             alert("Kickstart nécessaire", "WHDLoad a besoin d'un vrai Kickstart (3.1 de l'A1200 de préférence) : AROS ne lui suffit pas.")
             return
         }
@@ -302,10 +419,14 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// L'émulation dans un nouveau processus de cette application
-    func launch(_ content: String) {
+    func launch(_ content: String, game: String? = nil) {
         let p = Process()
         p.executableURL = Bundle.main.executableURL
         p.arguments = ["--emu", content]
+        // Nom du jeu (sa capture dans la Bibliothèque) quand le contenu est une configuration
+        var env = ProcessInfo.processInfo.environment
+        env["AMIGA1200_JEU"] = game
+        p.environment = env
         do { try p.run() } catch { alert("Démarrage impossible", error.localizedDescription) }
     }
 }

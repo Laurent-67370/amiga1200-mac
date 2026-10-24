@@ -15,6 +15,8 @@ enum Core {
         amb_set_option("amiberry_crop_overscan", "enabled")
         amb_set_option("amiberry_statusline", "disabled")
         amb_set_option("amiberry_joyport_order", "21")
+        // Jeu WHDLoad dans une archive autre que .lha (dossier zippé, .lzx…) : le cœur la lance comme une .lha
+        amb_set_option("amiberry_whdload_archive", ["zip", "7z", "lzx"].contains((content as NSString).pathExtension.lowercased()) ? "enabled" : "disabled")
         return amb_start(content) != 0
     }
 }
@@ -71,7 +73,7 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func stats() {
         let n = amb_frames(), busy = amb_busy_us()
         let fps = amb_fps() > 0 ? amb_fps() : 50
-        let jit = Settings.shared.jit && Settings.bigBox(Settings.shared.model) && !Settings.isWhd(content) ? " · JIT" : ""
+        let jit = Settings.shared.jit && Settings.bigBox(Settings.shared.model) && content.hasSuffix("amiga.uae") ? " · JIT" : ""
         let what = paused ? "en pause" : turbo ? "turbo : \(n) images/s" :
             String(format: "%d images/s · %d %% · %.1f ms/image", n, Int(Double(n) * 100 / fps), n > 0 ? busy / Double(n) / 1000 : 0)
         window.title = "Amiga 1200 — \(what)\(jit)" + (view.captured ? "  (⌥⌘ ou F12 : libérer la souris)" : "  (cliquez pour capturer la souris)")
@@ -147,7 +149,8 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     /// Jeu en cours (son image dans la Bibliothèque) : l'archive WHDLoad, sinon la disquette DF0:, sinon le premier disque dur
     var gameName: String? {
-        if Settings.isWhd(content) { return (content as NSString).lastPathComponent }
+        if !content.hasSuffix(".uae") { return (content as NSString).lastPathComponent }   // archive WHDLoad
+        if let g = ProcessInfo.processInfo.environment["AMIGA1200_JEU"] { return g }       // jeu WHDLoad sur .hdf
         let s = Settings.shared
         let p = !s.df0.isEmpty ? s.df0 : s.hds.first ?? ""
         return p.isEmpty ? nil : (p as NSString).lastPathComponent
