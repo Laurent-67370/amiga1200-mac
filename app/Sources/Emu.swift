@@ -24,12 +24,16 @@ enum Core {
 /// Fenêtre de l'émulation (processus lancé par l'accueil avec --emu) : l'image, le clavier, la souris, les manettes
 final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let content: String
+    /// Lancé par « Reprendre où j'en étais » : l'état gardé est rechargé une fois l'Amiga allumé
+    let resume: Bool
+    var restarting = false
+    var statesPanel: SaveStatesPanel?
     var window: NSWindow!
     var view: EmuView!
     var paused = false, turbo = false
     var statsTimer: Timer?
 
-    init(content: String) { self.content = content }
+    init(content: String, resume: Bool = false) { self.content = content; self.resume = resume }
 
     func applicationDidFinishLaunching(_ n: Notification) {
         buildMenu()
@@ -53,6 +57,14 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             case 2:
                 t.invalidate()
                 self.view.startDisplay()
+                if self.resume {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        let f = Settings.resumeFile
+                        let ok = FileManager.default.fileExists(atPath: f.path) && amb_load_state(f.path) != 0
+                        try? FileManager.default.removeItem(at: f)
+                        self.flash(ok ? "reprise où vous en étiez" : "reprise impossible, l'Amiga redémarre normalement")
+                    }
+                } else { try? FileManager.default.removeItem(at: Settings.resumeFile) }   // les disques changent : l'ancien état ne vaut plus
                 self.statsTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.stats() }
             case 1:
                 if Date().timeIntervalSince(t0) > 60 { t.invalidate(); self.fail("le cœur ne répond pas") }
@@ -83,6 +95,15 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationWillTerminate(_ n: Notification) {
         // Image du jeu pour la Bibliothèque, s'il n'en a pas encore
         if amb_state() == 2, let g = gameName { _ = Captures.save(name: g, gallery: false, onlyIfMissing: true) }
+        // « Reprendre où j'en étais » : l'état est gardé, avec ce qu'il faut pour rallumer la même chose (machine ou jeu)
+        if amb_state() == 2 && !restarting && amb_save_state(Settings.resumeFile.path) != 0 {
+            let s = Settings.shared
+            s.resumeSig = s.signature()
+            let env = ProcessInfo.processInfo.environment
+            if !content.hasSuffix(".uae") { s.resumeGame = "whd\n\(content)\n\((content as NSString).lastPathComponent)" }
+            else if let h = env["AMIGA1200_HDF"] { s.resumeGame = "hdf\n\(h)\n\(env["AMIGA1200_JEU"] ?? (h as NSString).lastPathComponent)" }
+            else { s.resumeGame = "" }
+        }
         amb_stop()
         usleep(200_000)   // écriture des disques
     }
@@ -104,6 +125,7 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         add("Pause", #selector(togglePause), "p")
         add("Sauvegarde rapide", #selector(quickSave), "s")
         add("Reprise rapide", #selector(quickLoad), "l")
+        add("Sauvegardes d'état…", #selector(showStates), "e")
         m.addItem(.separator())
         add("Disquette DF0:…", #selector(insertDF0), "o")
         add("Disquette DF1:…", #selector(insertDF1), "o", [.command, .shift])
@@ -123,10 +145,14 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc func togglePause() { paused.toggle(); amb_pause(paused ? 1 : 0); stats() }
     @objc func toggleTurbo() { turbo.toggle(); amb_turbo(turbo ? 1 : 0) }
-    @objc func quickSave() { flash(amb_save_state(Paths.save.appendingPathComponent("etat-\(Settings.shared.model)-1.uss").path) != 0 ? "État sauvegardé" : "Sauvegarde impossible") }
-    @objc func quickLoad() {
-        let f = Paths.save.appendingPathComponent("etat-\(Settings.shared.model)-1.uss")
-        flash(FileManager.default.fileExists(atPath: f.path) && amb_load_state(f.path) != 0 ? "État repris" : "Aucun état à reprendre")
+    /// Emplacement 1 du jeu en cours (sinon de la machine)
+    var stateKey: String { gameName ?? Settings.shared.model }
+    @objc func quickSave() { flash(SaveStates.save(stateKey, 0) ? "État 1 sauvegardé" : "Sauvegarde impossible") }
+    @objc func quickLoad() { flash(SaveStates.load(stateKey, 0) ? "État 1 repris" : "Aucun état à reprendre") }
+    @objc func showStates() {
+        view.release()
+        statesPanel = SaveStatesPanel(game: stateKey) { [weak self] t in self?.flash(t) }
+        statesPanel?.show(over: window)
     }
     @objc func insertDF0() { insert(0) }
     @objc func insertDF1() { insert(1) }
@@ -162,6 +188,7 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func openLog() { NSWorkspace.shared.open(Paths.log) }
     /// Le cœur ne se rallume pas dans le même processus : un nouveau processus prend la suite
     @objc func restart() {
+        restarting = true
         let p = Process()
         p.executableURL = Bundle.main.executableURL
         p.arguments = ["--emu", content]

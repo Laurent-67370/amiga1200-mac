@@ -2,7 +2,7 @@ import AppKit
 
 /// Trois façons de démarrer :
 ///   (sans argument)               l'écran d'accueil
-///   --emu <contenu>               l'émulation (lancée par l'accueil, dans son propre processus)
+///   --emu <contenu> [--resume]    l'émulation (lancée par l'accueil, dans son propre processus), reprise ou non
 ///   --selftest <images>           essai sans fenêtre : AROS sur un A1200 avec JIT, pour la compilation automatique
 let args = CommandLine.arguments
 
@@ -13,7 +13,7 @@ if let i = args.firstIndex(of: "--selftest") {
 let app = NSApplication.shared
 app.setActivationPolicy(.regular)
 if let i = args.firstIndex(of: "--emu"), i + 1 < args.count {
-    let delegate = EmuDelegate(content: args[i + 1])
+    let delegate = EmuDelegate(content: args[i + 1], resume: args.contains("--resume"))
     app.delegate = delegate
     app.run()
 } else {
