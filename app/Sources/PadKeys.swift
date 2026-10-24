@@ -7,12 +7,18 @@ enum PadKeys {
     static let buttons = ["X", "Y", "L1", "R1", "L2", "R2", "L3", "R3", "Menu", "Options"]
 
     /// Touches proposées (codes RETROK du cœur) ; 0 : le bouton reste un bouton de manette
-    static let keys: [(Int, String)] = [
-        (0, "Manette (par défaut)"), (32, "Espace"), (13, "Return"), (27, "Échap"), (127, "Del"), (8, "Retour arrière"),
-        (281, "Help"), (9, "Tab"), (304, "Maj"), (306, "Ctrl"), (308, "Alt"), (311, "Amiga gauche"), (312, "Amiga droite"),
-        (273, "↑"), (274, "↓"), (276, "←"), (275, "→"), (268, "* (pavé)"),
-    ] + (1...10).map { (281 + $0, "F\($0)") } + (1...9).map { (48 + $0, "\($0)") } + [(48, "0")] +
-        "ynpqmsjc".map { (Int($0.asciiValue!), $0.uppercased()) }
+    static let keys: [(Int, String)] = {
+        var k: [(Int, String)] = [
+            (0, "Manette (par défaut)"), (32, "Espace"), (13, "Return"), (27, "Échap"), (127, "Del"), (8, "Retour arrière"),
+            (281, "Help"), (9, "Tab"), (304, "Maj"), (306, "Ctrl"), (308, "Alt"), (311, "Amiga gauche"), (312, "Amiga droite"),
+            (273, "↑"), (274, "↓"), (276, "←"), (275, "→"), (268, "* (pavé)"),
+        ]
+        for i in 1...10 { k.append((281 + i, "F\(i)")) }
+        for i in 1...9 { k.append((48 + i, "\(i)")) }
+        k.append((48, "0"))
+        for c in "ynpqmsjc" { k.append((Int(c.asciiValue!), c.uppercased())) }
+        return k
+    }()
 
     private static let d = UserDefaults.standard
 
