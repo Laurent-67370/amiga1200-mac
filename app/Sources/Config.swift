@@ -72,9 +72,9 @@ final class Settings {
     private let d = UserDefaults.standard
 
     /// A500, A600, A1200, A3000, A4000, CD32 ou CDTV
-    var model: String { get { d.string(forKey: "model") ?? "A1200" } set { d.set(newValue, forKey: "model") } }
-    var jit: Bool { get { d.object(forKey: "jit") as? Bool ?? true } set { d.set(newValue, forKey: "jit") } }
-    var rtg: Bool { get { d.object(forKey: "rtg") as? Bool ?? true } set { d.set(newValue, forKey: "rtg") } }
+    var model: String { get { d.string(forKey: "model") ?? "A1200" } set { d.set(newValue, forKey: "model"); saveProfile() } }
+    var jit: Bool { get { d.object(forKey: "jit") as? Bool ?? true } set { d.set(newValue, forKey: "jit"); saveProfile() } }
+    var rtg: Bool { get { d.object(forKey: "rtg") as? Bool ?? true } set { d.set(newValue, forKey: "rtg"); saveProfile() } }
     var ntsc: Bool { get { d.bool(forKey: "ntsc") } set { d.set(newValue, forKey: "ntsc") } }
     var shared: Bool { get { d.object(forKey: "shared") as? Bool ?? true } set { d.set(newValue, forKey: "shared") } }
     var floppySound: Bool { get { d.object(forKey: "floppySound") as? Bool ?? true } set { d.set(newValue, forKey: "floppySound") } }
@@ -90,13 +90,61 @@ final class Settings {
     /// CD de la CD32 ou du CDTV (image .iso ou .chd)
     var cd: String { get { d.string(forKey: "cd") ?? "" } set { d.set(newValue, forKey: "cd") } }
     /// Mémoire Chip en blocs de 512 Ko (0 : celle du modèle ; 1 = 512 Ko, 2 = 1 Mo, 4 = 2 Mo)
-    var chip: Int { get { d.object(forKey: "chip") as? Int ?? 0 } set { d.set(newValue, forKey: "chip") } }
+    var chip: Int { get { d.object(forKey: "chip") as? Int ?? 0 } set { d.set(newValue, forKey: "chip"); saveProfile() } }
     /// Mémoire Slow (« trappe » de l'A500) en blocs de 256 Ko (-1 : celle du modèle ; 0, 2 = 512 Ko, 4 = 1 Mo)
-    var slow: Int { get { d.object(forKey: "slow") as? Int ?? -1 } set { d.set(newValue, forKey: "slow") } }
+    var slow: Int { get { d.object(forKey: "slow") as? Int ?? -1 } set { d.set(newValue, forKey: "slow"); saveProfile() } }
     /// Mémoire Fast Zorro II en Mo (0, 2, 4, 8 ; pas avec le JIT, qui a déjà 64 Mo de Zorro III)
-    var fast: Int { get { d.object(forKey: "fast") as? Int ?? 0 } set { d.set(newValue, forKey: "fast") } }
+    var fast: Int { get { d.object(forKey: "fast") as? Int ?? 0 } set { d.set(newValue, forKey: "fast"); saveProfile() } }
     /// Carte accélératrice sans JIT (A1200, A3000, A4000) : « none », « 030 » (68030/68882) ou « 040 »
-    var accel: String { get { d.string(forKey: "accel") ?? "none" } set { d.set(newValue, forKey: "accel") } }
+    var accel: String { get { d.string(forKey: "accel") ?? "none" } set { d.set(newValue, forKey: "accel"); saveProfile() } }
+
+    // ---------- réglages retenus par disque de démarrage ----------
+    /// Disque qui démarre : le CD des consoles, sinon la disquette DF0:, sinon le premier disque dur
+    func bootKey() -> String {
+        let p = Settings.cdConsole(model) ? cd : !df0.isEmpty ? df0 : hds.first ?? ""
+        return (p as NSString).lastPathComponent
+    }
+    private static let profileKeys = ["model", "jit", "rtg", "chip", "slow", "fast", "accel"]
+    private func saveProfile() {
+        let k = bootKey()
+        if k.isEmpty { return }
+        var p: [String: Any] = [:]
+        for key in Settings.profileKeys { if let v = d.object(forKey: key) { p[key] = v } }
+        d.set(p, forKey: "profil:" + k)
+    }
+    /// Reprend la machine, la mémoire et le processeur retenus pour le disque de démarrage ; vrai s'ils existaient
+    @discardableResult
+    func applyProfile() -> Bool {
+        guard let p = d.dictionary(forKey: "profil:" + bootKey()) else { return false }
+        for key in Settings.profileKeys { d.set(p[key], forKey: key) }
+        return true
+    }
+
+    // ---------- configurations enregistrées ----------
+    private static let snapshotKeys = ["model", "jit", "rtg", "ntsc", "shared", "chip", "slow", "fast", "accel", "df0", "df1", "hds", "cd"]
+    /// Machine et disques, pour une configuration enregistrée sous un nom
+    func snapshot() -> [String: Any] {
+        var o: [String: Any] = [:]
+        for key in Settings.snapshotKeys { if let v = d.object(forKey: key) { o[key] = v } }
+        return o
+    }
+    func restore(_ o: [String: Any]) { for key in Settings.snapshotKeys { d.set(o[key], forKey: key) } }
+    var configs: [String: [String: Any]] {
+        get { d.dictionary(forKey: "configs") as? [String: [String: Any]] ?? [:] }
+        set { d.set(newValue, forKey: "configs") }
+    }
+
+    // ---------- reprise où l'on en était ----------
+    /// Signature de la configuration : la reprise n'est proposée qu'avec la même machine et les mêmes disques
+    func signature() -> String {
+        [model, "\(jit)", "\(rtg)", "\(ntsc)", rom, romName, df0, df1, cd, hds.joined(separator: "|"), "\(chip)", "\(slow)", "\(fast)", accel].joined(separator: "#")
+    }
+    var resumeSig: String { get { d.string(forKey: "resumeSig") ?? "" } set { d.set(newValue, forKey: "resumeSig") } }
+    /// Jeu lancé directement dont l'état est gardé : « whd » ou « hdf », son chemin et son nom (lignes) ; vide pour la
+    /// machine de l'accueil
+    var resumeGame: String { get { d.string(forKey: "resumeGame") ?? "" } set { d.set(newValue, forKey: "resumeGame") } }
+    /// État de « Reprendre où j'en étais » (une seule fois)
+    static var resumeFile: URL { Paths.save.appendingPathComponent("reprise.uss") }
 
     /// Kickstart utilisé pour cette machine (nil : AROS)
     func kick(_ model: String) -> Rom? { rom == "user" ? Kickstarts.best(model) : nil }

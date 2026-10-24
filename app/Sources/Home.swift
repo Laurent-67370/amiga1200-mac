@@ -13,6 +13,8 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
     let romList = NSStackView()
     var memPopups: [(NSPopUpButton, [Int], () -> Int, (Int) -> Void)] = []
     var accelPopup = NSPopUpButton()
+    let resumeButton = NSButton(title: "", target: nil, action: nil)
+    let cfgList = NSStackView()
     var hdLabel = NSTextField(wrappingLabelWithString: "")
     var modelPopup = NSPopUpButton()
     var checks: [(NSButton, () -> Bool)] = []
@@ -63,7 +65,7 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         col.addArrangedSubview(section("💾 Disques"))
         col.addArrangedSubview(df0Label)
         col.addArrangedSubview(row([
-            button("DF0:…") { [self] in if let p = pick("Disquette DF0: (ADF, DMS, IPF…) ou jeu WHDLoad (.lha)") { Library.add(p); s.df0 = p; refresh() } },
+            button("DF0:…") { [self] in if let p = pick("Disquette DF0: (ADF, DMS, IPF…) ou jeu WHDLoad (.lha)") { Library.add(p); s.df0 = p; profile(); refresh() } },
             button("Éjecter DF0:") { [self] in s.df0 = ""; refresh() },
             button("DF1:…") { [self] in if let p = pick("Disquette DF1:") { Library.add(p); s.df1 = p; refresh() } },
             button("Éjecter DF1:") { [self] in s.df1 = ""; refresh() },
@@ -103,6 +105,27 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         power.bezelStyle = .rounded; power.controlSize = .large; power.keyEquivalent = "\r"
         power.font = .boldSystemFont(ofSize: 16)
         col.addArrangedSubview(power)
+        // Reprendre où l'on en était : la machine de l'accueil (mêmes disques) ou le jeu lancé directement
+        resumeButton.bezelStyle = .rounded; resumeButton.controlSize = .large
+        resumeButton.target = self; resumeButton.action = #selector(resumeGame)
+        col.addArrangedSubview(resumeButton)
+
+        col.addArrangedSubview(section("🗂 Configurations"))
+        cfgList.orientation = .vertical; cfgList.alignment = .leading; cfgList.spacing = 2
+        col.addArrangedSubview(cfgList)
+        col.addArrangedSubview(row([
+            button("Enregistrer…") { [self] in saveConfig() },
+            button("Exporter .uae…") { [self] in exportUae() },
+            button("Importer .uae…") { [self] in if let p = pick("Configuration WinUAE ou Amiberry (.uae)") { alert("Import", ConfigsIO.import(s, from: URL(fileURLWithPath: p))); refresh() } },
+        ]))
+        col.addArrangedSubview(note("Une configuration garde la machine, la mémoire et ses disques. L'export .uae se relit dans WinUAE, Amiberry et les versions web et Android. La machine choisie est aussi retenue pour chaque disque de démarrage."))
+
+        col.addArrangedSubview(section("📦 Changer de Mac"))
+        col.addArrangedSubview(row([
+            button("Tout exporter…") { [self] in exportBackup() },
+            button("Importer…") { [self] in importBackup() },
+        ]))
+        col.addArrangedSubview(note("Un seul fichier .zip : réglages, Bibliothèque, configurations, Kickstart, sauvegardes d'état, sauvegardes des jeux (WHDLoad, SHARED:), disques extraits des archives et captures. Les jeux rangés ailleurs n'y sont pas : sur l'autre Mac, ajoutez-les à la Bibliothèque. Ce fichier contient vos Kickstart : ne le partagez pas."))
         col.addArrangedSubview(note("Pendant le jeu : cliquez dans la fenêtre pour capturer la souris, ⌥⌘ ou F12 pour la libérer. ⌘ = touches Amiga. Menu Amiga : disquettes, sauvegarde rapide (⌘S / ⌘L), image, plein écran, réinitialisation."))
 
         let scroll = NSScrollView()
@@ -130,6 +153,8 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
+    /// Retour à l'accueil après une partie : la reprise et les images sont peut-être nouvelles
+    func applicationDidBecomeActive(_ n: Notification) { if window != nil { refresh() } }
 
     func buildMenu() {
         let bar = NSMenu()
@@ -180,6 +205,26 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         cdLabel.stringValue = "CD : " + (s.cd.isEmpty ? "aucun" : (s.cd as NSString).lastPathComponent)
         for (p, values, get, _) in memPopups { p.selectItem(at: values.firstIndex(of: get()) ?? 0) }
         accelPopup.selectItem(at: ["none", "030", "040"].firstIndex(of: s.accel) ?? 0)
+        let game = s.resumeGame.components(separatedBy: "\n")
+        let rf = Settings.resumeFile
+        let date = (try? FileManager.default.attributesOfItem(atPath: rf.path)[.modificationDate] as? Date) ?? nil
+        let canResume = date != nil && (game.count == 3 || s.resumeSig == s.signature())
+        resumeButton.isHidden = !canResume
+        if let date, canResume {
+            let fmt = DateFormatter(); fmt.locale = Locale(identifier: "fr_FR"); fmt.dateFormat = "dd/MM HH:mm"
+            resumeButton.title = "⏯  Reprendre " + (game.count == 3 ? (game[2] as NSString).deletingPathExtension + " " : "où j'en étais ") + "(\(fmt.string(from: date)))"
+        }
+        cfgList.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let cfgs = s.configs
+        if cfgs.isEmpty { cfgList.addArrangedSubview(note("Aucune configuration enregistrée.")) }
+        for name in cfgs.keys.sorted() {
+            let l = NSTextField(labelWithString: name)
+            l.translatesAutoresizingMaskIntoConstraints = false
+            l.widthAnchor.constraint(equalToConstant: 300).isActive = true
+            cfgList.addArrangedSubview(row([l,
+                ClosureButton("Charger") { [self] in if let c = s.configs[name] { s.restore(c); refresh() } },
+                ClosureButton("✕") { [self] in var c = s.configs; c[name] = nil; s.configs = c; refresh() }]))
+        }
         df0Label.stringValue = "DF0: " + (s.df0.isEmpty ? "vide" : (s.df0 as NSString).lastPathComponent)
         df1Label.stringValue = "DF1: " + (s.df1.isEmpty ? "vide" : (s.df1 as NSString).lastPathComponent)
         hdLabel.stringValue = s.hds.isEmpty ? "Disques durs : aucun" :
@@ -279,13 +324,13 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
                 if Kickstarts.cdtvExt() != nil { views.append(ClosureButton("▶ CDTV") { [self] in playCd(it, "CDTV") }) }
                 views.append(ClosureButton("▶ CD32") { [self] in playCd(it, "CD32") })
             case Library.floppy:
-                views.append(ClosureButton("▶ Jouer") { [self] in Library.touch(it.path); s.df0 = it.path; refresh(); powerOn() })
-                views.append(ClosureButton("DF0:") { [self] in Library.touch(it.path); s.df0 = it.path; refresh() })
+                views.append(ClosureButton("▶ Jouer") { [self] in Library.touch(it.path); s.df0 = it.path; profile(); refresh(); powerOn() })
+                views.append(ClosureButton("DF0:") { [self] in Library.touch(it.path); s.df0 = it.path; profile(); refresh() })
             default:
                 let on = s.hds.contains(it.path)
                 views.append(ClosureButton(on ? "✓ Branché" : "+ Brancher") { [self] in
                     if on { s.hds = s.hds.filter { $0 != it.path } }
-                    else if s.hds.count < 8 { Library.touch(it.path); s.hds = s.hds + [it.path] }
+                    else if s.hds.count < 8 { Library.touch(it.path); s.hds = s.hds + [it.path]; profile() }
                     refresh()
                 })
             }
@@ -342,7 +387,7 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
             return
         }
         Library.touch(it.path)
-        launch(Config.write(s, whdHdf: it.path).path, game: it.name)
+        launch(Config.write(s, whdHdf: it.path).path, game: it.name, hdf: it.path)
     }
 
     /// CD de la CD32 ou du CDTV : la console démarre dessus (il lui faut ses ROM)
@@ -400,6 +445,60 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         let a = NSAlert(); a.messageText = t; a.informativeText = msg; a.runModal()
     }
 
+    /// Machine retenue pour ce disque de démarrage (JIT ou non, mémoire…) : reprise d'elle-même
+    func profile() { s.applyProfile() }
+
+    func saveConfig() {
+        let a = NSAlert(); a.messageText = "Enregistrer la configuration"
+        let f = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        f.stringValue = (s.bootKey() as NSString).deletingPathExtension
+        a.accessoryView = f
+        a.addButton(withTitle: "Enregistrer"); a.addButton(withTitle: "Annuler")
+        guard a.runModal() == .alertFirstButtonReturn else { return }
+        let n = f.stringValue.trimmingCharacters(in: .whitespaces)
+        if n.isEmpty { return }
+        var c = s.configs; c[n] = s.snapshot(); s.configs = c
+        refresh()
+    }
+
+    func savePanel(_ name: String, _ ext: String) -> URL? {
+        let p = NSSavePanel()
+        p.nameFieldStringValue = name
+        p.allowedFileTypes = [ext]
+        return p.runModal() == .OK ? p.url : nil
+    }
+    func exportUae() {
+        guard let u = savePanel(((s.bootKey().isEmpty ? "amiga" : s.bootKey()) as NSString).deletingPathExtension + ".uae", "uae") else { return }
+        alert("Export", ConfigsIO.export(s, to: u) ? "Configuration exportée : \(u.lastPathComponent)" : "Export impossible")
+    }
+    func exportBackup() {
+        let fmt = DateFormatter(); fmt.dateFormat = "yyyy-MM-dd"
+        guard let u = savePanel("amiga1200-sauvegarde-\(fmt.string(from: Date())).zip", "zip") else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            let msg = Backup.export(to: u)
+            DispatchQueue.main.async { [self] in alert("Changer de Mac", msg) }
+        }
+    }
+    func importBackup() {
+        guard let p = pick("Sauvegarde d'Amiga 1200 (.zip)") else { return }
+        let a = NSAlert(); a.messageText = "Importer la sauvegarde ?"
+        a.informativeText = "Les réglages, la Bibliothèque et les configurations sont remplacés par ceux de la sauvegarde ; ses Kickstart, sauvegardes d'état et captures s'ajoutent. Éteignez l'Amiga avant."
+        a.addButton(withTitle: "Importer"); a.addButton(withTitle: "Annuler")
+        guard a.runModal() == .alertFirstButtonReturn else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            let msg = Backup.import(from: URL(fileURLWithPath: p))
+            DispatchQueue.main.async { [self] in refresh(); alert("Changer de Mac", msg) }
+        }
+    }
+
+    /// « Reprendre où j'en étais » : la machine de l'accueil, ou le jeu lancé directement (WHDLoad, .hdf)
+    @objc func resumeGame() {
+        let g = s.resumeGame.components(separatedBy: "\n")
+        if g.count == 3 && g[0] == "whd" { launch(g[1], resume: true) }
+        else if g.count == 3 && g[0] == "hdf" { launch(Config.write(s, whdHdf: g[1]).path, game: g[2], hdf: g[1], resume: true) }
+        else { launch(Config.content(s), resume: true) }
+    }
+
     /// L'émulation dans un nouveau processus de cette application (le cœur ne se rallume pas dans le même)
     @objc func powerOn() {
         if s.model == "CD32" && !Kickstarts.cd32Rom {
@@ -419,13 +518,14 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// L'émulation dans un nouveau processus de cette application
-    func launch(_ content: String, game: String? = nil) {
+    func launch(_ content: String, game: String? = nil, hdf: String? = nil, resume: Bool = false) {
         let p = Process()
         p.executableURL = Bundle.main.executableURL
-        p.arguments = ["--emu", content]
-        // Nom du jeu (sa capture dans la Bibliothèque) quand le contenu est une configuration
+        p.arguments = ["--emu", content] + (resume ? ["--resume"] : [])
+        // Nom du jeu (sa capture dans la Bibliothèque) quand le contenu est une configuration, et son disque (reprise)
         var env = ProcessInfo.processInfo.environment
         env["AMIGA1200_JEU"] = game
+        env["AMIGA1200_HDF"] = hdf
         p.environment = env
         do { try p.run() } catch { alert("Démarrage impossible", error.localizedDescription) }
     }

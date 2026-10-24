@@ -38,6 +38,14 @@ Il faut macOS 13 ou plus récent, sur un Mac Apple Silicon.
   donnés dans `WHDCommon:Kickstarts`). Il faut un vrai Kickstart.
 - **Disques durs** : un .hdf sans table de partitions reçoit sa géométrie ; une disquette démarrée avec un Kickstart
   1.x laisse les disques durs débranchés, pour laisser sa mémoire au jeu.
+- **Reprendre où j'en étais** : en quittant l'émulation, l'état est gardé ; l'accueil propose « ⏯ Reprendre » (le jeu
+  WHDLoad lancé directement, ou la machine de l'accueil avec les mêmes disques).
+- **Sauvegardes d'état** : quatre emplacements par jeu avec leur image et leur date (menu Amiga → Sauvegardes d'état…,
+  ⌘E) ; ⌘S / ⌘L pour le premier.
+- **Configurations** enregistrées sous un nom, **export et import .uae** (WinUAE, Amiberry, versions web et Android) ;
+  machine, mémoire et processeur retenus pour chaque disque de démarrage.
+- **Changer de Mac** : *Tout exporter…* range dans un seul `.zip` réglages, Bibliothèque, configurations, Kickstart,
+  sauvegardes d'état et des jeux, disques extraits et captures ; *Importer…* sur l'autre Mac.
 - **Captures d'écran** (⌘K) : l'image du jeu dans la Bibliothèque, une copie dans Images/Amiga1200 ; un jeu sans image
   en reçoit une quand on quitte.
 - **Fenêtre de l'émulation** (son propre processus) : un clic capture la souris, **⌥⌘** ou **F12** la libère.
