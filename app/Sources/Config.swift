@@ -85,6 +85,21 @@ final class Settings {
     var romName: String { get { d.string(forKey: "romName") ?? "" } set { d.set(newValue, forKey: "romName") } }
     var df0: String { get { d.string(forKey: "df0") ?? "" } set { d.set(newValue, forKey: "df0") } }
     var df1: String { get { d.string(forKey: "df1") ?? "" } set { d.set(newValue, forKey: "df1") } }
+    var df2: String { get { d.string(forKey: "df2") ?? "" } set { d.set(newValue, forKey: "df2") } }
+    var df3: String { get { d.string(forKey: "df3") ?? "" } set { d.set(newValue, forKey: "df3") } }
+    /// Lecteur DFn:
+    func floppy(_ n: Int) -> String { [df0, df1, df2, df3][n] }
+    func setFloppy(_ n: Int, _ p: String) { switch n { case 0: df0 = p; case 1: df1 = p; case 2: df2 = p; default: df3 = p } }
+    /// Image : 0 lisse, 1 nette (pixels francs), 2 écran cathodique (lignes de balayage)
+    var filter: Int { get { d.object(forKey: "filter") as? Int ?? (sharp ? 1 : 0) } set { d.set(newValue, forKey: "filter") } }
+    /// Agrandissement en multiple entier des pixels de l'Amiga (pixels tous de la même taille)
+    var integer: Bool { get { d.bool(forKey: "integer") } set { d.set(newValue, forKey: "integer") } }
+    /// MIDI sur le port série de l'Amiga (CoreMIDI) ; appareils choisis par leur nom (vide : le premier, aucun en entrée)
+    var midi: Bool { get { d.bool(forKey: "midi") } set { d.set(newValue, forKey: "midi") } }
+    var midiOut: String { get { d.string(forKey: "midiOut") ?? "" } set { d.set(newValue, forKey: "midiOut") } }
+    var midiIn: String { get { d.string(forKey: "midiIn") ?? "" } set { d.set(newValue, forKey: "midiIn") } }
+    /// Touche de sortie des jeux WHDLoad (code RETROK) : F10, * du pavé ou Échap
+    var quitKey: Int { get { d.object(forKey: "quitKey") as? Int ?? 291 } set { d.set(newValue, forKey: "quitKey") } }
     /// Disques durs DH0: à DH7: (chemins), le premier démarre
     var hds: [String] { get { d.stringArray(forKey: "hds") ?? [] } set { d.set(newValue, forKey: "hds") } }
     /// CD de la CD32 ou du CDTV (image .iso ou .chd)
@@ -121,7 +136,7 @@ final class Settings {
     }
 
     // ---------- configurations enregistrées ----------
-    private static let snapshotKeys = ["model", "jit", "rtg", "ntsc", "shared", "chip", "slow", "fast", "accel", "df0", "df1", "hds", "cd"]
+    private static let snapshotKeys = ["model", "jit", "rtg", "ntsc", "shared", "chip", "slow", "fast", "accel", "df0", "df1", "df2", "df3", "hds", "cd"]
     /// Machine et disques, pour une configuration enregistrée sous un nom
     func snapshot() -> [String: Any] {
         var o: [String: Any] = [:]
@@ -137,7 +152,7 @@ final class Settings {
     // ---------- reprise où l'on en était ----------
     /// Signature de la configuration : la reprise n'est proposée qu'avec la même machine et les mêmes disques
     func signature() -> String {
-        [model, "\(jit)", "\(rtg)", "\(ntsc)", rom, romName, df0, df1, cd, hds.joined(separator: "|"), "\(chip)", "\(slow)", "\(fast)", accel].joined(separator: "#")
+        [model, "\(jit)", "\(rtg)", "\(ntsc)", rom, romName, df0, df1, df2, df3, cd, hds.joined(separator: "|"), "\(chip)", "\(slow)", "\(fast)", accel].joined(separator: "#")
     }
     var resumeSig: String { get { d.string(forKey: "resumeSig") ?? "" } set { d.set(newValue, forKey: "resumeSig") } }
     /// Jeu lancé directement dont l'état est gardé : « whd » ou « hdf », son chemin et son nom (lignes) ; vide pour la
@@ -205,7 +220,7 @@ enum Config {
         let sys = Paths.sys
         let model = whdHdf != nil ? "A1200" : s.model
         var l = ["quickstart=\(model),0"]
-        let floppies = arosOnly || whdHdf != nil ? ["", ""] : [s.df0, s.df1]
+        let floppies = arosOnly || whdHdf != nil ? ["", "", "", ""] : [s.df0, s.df1, s.df2, s.df3]
         var hds = arosOnly ? [] : whdHdf.map { [$0] } ?? s.hds
         if model == "CD32" {
             // CD32 : la console telle qu'elle est, avec ses propres ROM (512 Ko + extension, ou ROM complète de 1 Mo)
@@ -244,9 +259,12 @@ enum Config {
                 amb_log("Disquette avec le \(k.label) : disques durs non branchés")
                 hds = []
             }
-            l += ["nr_floppies=2", "floppy1type=0"]
-            for (i, f) in floppies.enumerated() where !f.isEmpty { l.append("floppy\(i)=\(f)") }
-            if s.floppySound { l += ["floppy0sound=1", "floppy1sound=1"] }
+            // Quatre lecteurs si DF2: ou DF3: sont utilisés
+            let n = floppies[2].isEmpty && floppies[3].isEmpty ? 2 : 4
+            l.append("nr_floppies=\(n)")
+            for i in 1..<n { l.append("floppy\(i)type=0") }
+            for (i, f) in floppies.enumerated() where !f.isEmpty && i < n { l.append("floppy\(i)=\(f)") }
+            if s.floppySound { for i in 0..<n { l.append("floppy\(i)sound=1") } }
             if whdHdf != nil { l.append("fastmem_size=8") }
             else if !arosOnly {
                 // Mémoire et processeur choisis
@@ -290,6 +308,11 @@ enum Config {
             if whdHdf != nil, let w = whdCommon() { l.append("filesystem2=ro,DH11:WHDCommon:\(w.path),-128") }
             // Sans disque dur, ni ROM de démarrage ni carte d'UAE, comme la version web : toute la mémoire au jeu
             if hds.isEmpty { l += ["boot_rom_uae=disabled", "uaeboard=disabled"] }
+        }
+        // MIDI du port série vers l'application (CoreMIDI), comme les versions web et Android
+        if s.midi && !arosOnly {
+            l.append("amiberry.midiout_device_name=Libretro MIDI")
+            if !s.midiIn.isEmpty { l.append("amiberry.midiin_device_name=Libretro MIDI") }
         }
         let f = arosOnly ? Paths.dir("cfg").appendingPathComponent("essai.uae") : Paths.config
         try? (l.joined(separator: "\n") + "\n").write(to: f, atomically: true, encoding: .utf8)

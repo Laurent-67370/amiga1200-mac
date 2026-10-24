@@ -18,7 +18,7 @@ swiftc -O -target arm64-apple-macos13.0 -module-name Amiga1200 \
   -import-objc-header "$ROOT/native/bridge.h" "$ROOT"/app/Sources/*.swift \
   -Xlinker -force_load -Xlinker "$CORE/libcore.a" \
   -lc++ -lz -liconv -framework CoreFoundation -framework DiskArbitration -framework AudioToolbox \
-  -framework AppKit -framework GameController -framework QuartzCore \
+  -framework AppKit -framework GameController -framework QuartzCore -framework CoreMIDI \
   -o "$APP/Contents/MacOS/Amiga1200"
 
 sed "s/@BUILD@/$BUILD/g" "$ROOT/app/Info.plist" > "$APP/Contents/Info.plist"
