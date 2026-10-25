@@ -52,6 +52,8 @@ Il faut macOS 13 ou plus récent, sur un Mac Apple Silicon.
   ⌘E) ; ⌘S / ⌘L pour le premier.
 - **Configurations** enregistrées sous un nom, **export et import .uae** (WinUAE, Amiberry, versions web et Android) ;
   machine, mémoire et processeur retenus pour chaque disque de démarrage.
+- **🌐 Web** (en haut de l'accueil) : lien vers la [version web](https://laurent-67370.github.io/amiga1200/) d'origine,
+  et rappel du passage de l'une à l'autre par les configurations .uae.
 - **Changer de Mac** : *Tout exporter…* range dans un seul `.zip` réglages, Bibliothèque, configurations, Kickstart,
   sauvegardes d'état et des jeux, disques extraits et captures ; *Importer…* sur l'autre Mac.
 - **Captures d'écran** (⌘K) : l'image du jeu dans la Bibliothèque, une copie dans Images/Amiga1200 ; un jeu sans image
