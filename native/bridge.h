@@ -45,3 +45,6 @@ void amb_midi_write(const uint8_t *src, unsigned len);
 unsigned amb_frames(void);
 double amb_busy_us(void);
 double amb_fps(void);
+
+/* Copie de fichiers sur un disque dur (native/hdtools.c) */
+#include "hdtools.h"

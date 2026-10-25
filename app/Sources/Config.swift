@@ -195,7 +195,7 @@ enum Config {
     }
 
     /// Noms des images de Kickstart pour WHDLoad (paquet skick), d'après la somme CRC32
-    private static let whdKickNames: [UInt32: String] = [
+    static let whdKickNames: [UInt32: String] = [
         0xA6CE1636: "kick33180.A500", 0xC4F0F55F: "kick34005.A500", 0xC3BDB240: "kick37175.A500",
         0xFC24AE0D: "kick40063.A600", 0x6C9B07D2: "kick39106.A1200", 0x1483A091: "kick40068.A1200",
         0xD6BAE334: "kick40068.A4000",

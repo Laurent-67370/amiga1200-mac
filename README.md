@@ -56,6 +56,12 @@ Il faut macOS 13 ou plus récent, sur un Mac Apple Silicon.
 - **Plusieurs Kickstart**, reconnus à leur contenu (somme CRC et version, 3.1.4 et 3.2 compris) : chacun sert
   automatiquement à la machine qui lui convient (1.3 pour l'Amiga 500 et le CDTV, 3.1 pour l'A1200…). Sinon, la ROM
   libre **AROS** fournie. La ROM de la CD32 et l'extension du CDTV s'ajoutent de la même façon.
+- **Ajouter sur un disque dur** (« Ajouter des fichiers sur un disque dur… », ou « Fichiers… » à côté d'un disque dur
+  de la Bibliothèque, Amiga éteint) : jeux WHDLoad `.lha` et archives `.zip` décompressés, disquettes `.adf` ouvertes
+  (dans un dossier à leur nom, avec leur icône), fichiers ou dossier entier copiés tels quels, sur la partition et
+  dans le dossier choisis (OFS et FFS, RDB compris). « Préparer pour WHDLoad » copie WHDLoad dans `C:` et, dans
+  `Devs:Kickstarts`, ses `.RTB` et vos Kickstart. Compte rendu des fichiers copiés et ignorés ; si la copie échoue
+  (place…), le disque n'est pas modifié.
 - **Scanner un dossier** (Bibliothèque) : un dossier choisi (Amiga Forever, disque externe…) est parcouru avec ses
   sous-dossiers ; Kickstart (reconnus par empreinte, ROM chiffrées d'Amiga Forever déchiffrées avec le `rom.key` du
   dossier), jeux WHDLoad, disquettes, disques durs, CD, archives `.zip` et configurations `.uae` sont reconnus par leur
