@@ -65,7 +65,8 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         add(libTabs)
         libList.orientation = .vertical; libList.alignment = .leading; libList.spacing = 4
         add(libList)
-        add(row([button("Ajouter des fichiers…") { [self] in addFiles(pickMany("Jeux WHDLoad (.lha, .zip), disquettes, disques durs (.hdf), CD ou Kickstart", multiple: true)) }]))
+        add(row([button("Ajouter des fichiers…") { [self] in addFiles(pickMany("Jeux WHDLoad (.lha, .zip), disquettes, disques durs (.hdf), CD ou Kickstart", multiple: true)) },
+                 button("Scanner un dossier…") { [self] in scanFolder() }]))
         add(note("Glissez aussi vos fichiers sur cette fenêtre depuis le Finder. Un jeu WHDLoad se lance d'un clic ; les .zip sont analysés (disque dur ou jeu WHDLoad extraits, archive abîmée signalée) ; un Kickstart est installé comme ROM de la machine."))
 
         card("🔑 Kickstart")

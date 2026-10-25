@@ -137,6 +137,7 @@ extension HomeDelegate {
     func help() {
         alert("Bien démarrer", """
             1. Kickstart : ajoutez vos fichiers ROM, plusieurs si vous voulez (3.1 pour l'A1200, 1.3 pour l'Amiga 500) : chacun sert à la machine qui lui convient. Sans eux, la ROM libre AROS démarre, mais WHDLoad, AGS et la plupart des jeux demandent un vrai Kickstart.
+            Le plus simple : Bibliothèque › « Scanner un dossier… » (celui d'Amiga Forever, une clé USB, votre dossier Amiga) : Kickstart, jeux WHDLoad, disquettes, disques durs, CD et configurations .uae sont reconnus d'un coup ; un bilan montre ce qui est déjà là et les Kickstart qui manquent.
             2. Jeux et disques : ajoutez vos jeux WHDLoad (.lha, .zip), disquettes, disques durs (.hdf) et CD à la Bibliothèque, ou glissez-les sur la fenêtre. Ils sont lus sur place, sans copie. Un jeu WHDLoad se lance d'un clic (▶ Jouer). Pour AGS, ajoutez tous ses .hdf d'un coup.
             3. Préréglage : « AGS / Workbench » pour AGS et le Workbench, « Amiga 500 » pour les vieux jeux, « CD32 » pour la console. Section Machine : A600, A3000, A4000 et CDTV aussi, mémoire et carte accélératrice.
             4. Allumez.
