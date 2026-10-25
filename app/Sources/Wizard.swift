@@ -112,6 +112,28 @@ extension HomeDelegate {
         if r == 0 && canPower { powerOn() } else if r == 1 { help() }
     }
 
+    /// La version web, à l'origine du projet : même cœur, rien à installer ; les configurations .uae passent de l'une à l'autre
+    static let webURL = "https://laurent-67370.github.io/amiga1200/"
+    func web() {
+        let a = NSAlert()
+        a.messageText = "🌐 La version web"
+        a.informativeText = """
+            Amiga 1200 est né dans le navigateur : la version web tourne sur le même cœur Amiberry, sans rien installer, sur ordinateur, tablette ou téléphone.
+
+            \(HomeDelegate.webURL)
+
+            Passer de l'une à l'autre : exportez une configuration .uae ici (Configurations › Exporter .uae…), importez-la dans la version web, et inversement. Vos Kickstart et vos disques restent à ajouter de chaque côté.
+            """
+        a.addButton(withTitle: "Ouvrir la version web")
+        a.addButton(withTitle: "Copier le lien")
+        a.addButton(withTitle: "Fermer")
+        switch a.runModal() {
+        case .alertFirstButtonReturn: if let u = URL(string: HomeDelegate.webURL) { NSWorkspace.shared.open(u) }
+        case .alertSecondButtonReturn: NSPasteboard.general.clearContents(); NSPasteboard.general.setString(HomeDelegate.webURL, forType: .string)
+        default: break
+        }
+    }
+
     func help() {
         alert("Bien démarrer", """
             1. Kickstart : ajoutez vos fichiers ROM, plusieurs si vous voulez (3.1 pour l'A1200, 1.3 pour l'Amiga 500) : chacun sert à la machine qui lui convient. Sans eux, la ROM libre AROS démarre, mais WHDLoad, AGS et la plupart des jeux demandent un vrai Kickstart.
@@ -131,6 +153,8 @@ extension HomeDelegate {
             Si l'émulation s'arrête brutalement, l'accueil prépare un rapport (journal et rapport de macOS) à copier ou à signaler sur GitHub.
 
             À l'accueil aussi : DF2: et DF3:, Image (filtre, pixels réguliers), MIDI (synthétiseur ou clavier par CoreMIDI), configurations enregistrées et export .uae, et « Changer de Mac » : tout exporter dans un fichier .zip, puis l'importer sur un autre Mac.
+
+            🌐 Web : la version web d'origine, dans le navigateur (\(HomeDelegate.webURL)) ; les configurations .uae passent de l'une à l'autre.
             """)
     }
 }

@@ -39,7 +39,8 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         title.font = .boldSystemFont(ofSize: 26); title.textColor = .systemOrange
         add(row([title,
             button("✨ Assistant") { [self] in wizard() },
-            button("? Aide") { [self] in help() }]))
+            button("? Aide") { [self] in help() },
+            button("🌐 Web") { [self] in web() }]))
         summary.textColor = .secondaryLabelColor
         add(summary)
         let power = NSButton(title: "▶  Allumer l'Amiga", target: self, action: #selector(powerOn))
