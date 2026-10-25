@@ -125,8 +125,10 @@ extension HomeDelegate {
             • ⌘P pause · ⌘S / ⌘L sauvegarde et reprise rapides · ⌘E les 4 emplacements avec leur image
             • ⌘O / ⇧⌘O disquettes DF0: et DF1: · ⌘N disquette vierge (pour les sauvegardes des jeux)
             • ⌘. quitter un jeu WHDLoad (F10 ; * ou Échap dans Touche de sortie)
-            • ⌘I filtre de l'image (lisse, net, écran cathodique) · ⌃⌘F plein écran · ⌘K capture · ⌘T turbo · ⌘R réinitialiser
+            • ⌘I filtre de l'image (lisse, net, écran cathodique) · ⌘J image et cadrage de ce jeu (zoom, position) · ⌃⌘F plein écran · ⌘K capture · ⌘T turbo · ⌘R réinitialiser
             • quitter la fenêtre garde l'état : « ⏯ Reprendre » le retrouve à l'accueil
+
+            Si l'émulation s'arrête brutalement, l'accueil prépare un rapport (journal et rapport de macOS) à copier ou à signaler sur GitHub.
 
             À l'accueil aussi : DF2: et DF3:, Image (filtre, pixels réguliers), MIDI (synthétiseur ou clavier par CoreMIDI), configurations enregistrées et export .uae, et « Changer de Mac » : tout exporter dans un fichier .zip, puis l'importer sur un autre Mac.
             """)

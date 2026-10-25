@@ -27,8 +27,9 @@ Il faut macOS 13 ou plus récent, sur un Mac Apple Silicon.
   DF3:, **disquette vierge** formatée (pour les sauvegardes des jeux), CD, jusqu'à **8 disques durs** (HDF, AGS
   compris), machine (**A500, A600, A1200, A3000, A4000, CD32, CDTV**), JIT, carte graphique RTG, volume SHARED:, NTSC,
   bruit des lecteurs.
-- **Image** : lisse, nette (pixels francs) ou **écran cathodique** (lignes de balayage), et **pixels réguliers**
-  (agrandissement en multiple entier).
+- **Image** : lisse, nette (pixels francs) ou **écran cathodique** (lignes de balayage), **pixels réguliers**
+  (agrandissement en multiple entier), 4:3 ou toute la fenêtre, et **cadrage retenu pour chaque jeu** (zoom, position
+  verticale : ⌘J pendant la partie).
 - **MIDI** par CoreMIDI : l'Amiga joue sur un synthétiseur (USB, Bluetooth, réseau, application de synthé), un clavier
   MIDI joue sur l'Amiga (Bars & Pipes, Music-X, OctaMED…).
 - **Mémoire et processeur** : Chip 512 Ko à 2 Mo, Slow, Fast jusqu'à 8 Mo, carte 68030 ou 68040 sans JIT (les vieux
@@ -63,6 +64,8 @@ Il faut macOS 13 ou plus récent, sur un Mac Apple Silicon.
   disquette vierge ⌘N), image (⌘I : filtre suivant), **quitter le jeu WHDLoad** (⌘. : F10, ou * ou Échap au choix),
   plein écran (⌃⌘F), capture d'écran (⌘K), bruit des lecteurs, turbo (vraiment rapide, même avec le JIT), journal,
   réinitialisation (⌘R).
+- **Rapport de plantage** : si l'émulation s'arrête brutalement, l'accueil prépare un rapport (fin du journal, rapport
+  de macOS) à copier, ouvrir ou signaler sur GitHub.
 - **Son** par Core Audio, l'émulation cadencée par le son (comme la version Android) ; vitesse affichée dans le titre.
 
 Dossiers : réglages, ROM et sauvegardes dans `~/Library/Application Support/Amiga1200` ; volume SHARED: dans
