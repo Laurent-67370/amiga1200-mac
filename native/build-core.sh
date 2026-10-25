@@ -52,9 +52,11 @@ FLAGS=(-O3 -DFE_AMIBERRY -I"$HERE/compat" -I"$SRC/libretro" -I"$SRC/libretro/lib
 # Le pont intercepte retro_set_environment (journal du cœur) : le frontal appelle notre fonction à sa place
 clang "${FLAGS[@]}" -Dretro_set_environment=amb_frontend_set_environment -c "$WEB/wasm/frontend.c" -o frontend.o
 clang "${FLAGS[@]}" -Wall -c "$HERE/bridge.c" -o bridge.o
+# Copie de fichiers sur un disque dur (module commun aux applications Android, Mac et PC)
+clang -O2 -Wall -c "$HERE/hdtools.c" -o hdtools.o
 find "$SRC/src" "$SRC/libretro" "$SRC/external" -name '*.o' | sort >objs.txt
 [ "$(wc -l <objs.txt)" -ge 300 ] || { echo "compilation incomplète, voir $OUT/make.log" >&2; exit 1; }
-echo frontend.o >>objs.txt; echo bridge.o >>objs.txt
+echo frontend.o >>objs.txt; echo bridge.o >>objs.txt; echo hdtools.o >>objs.txt
 rm -f libcore.a
 libtool -static -o libcore.a -filelist objs.txt 2>libtool.log || { cat libtool.log; exit 1; }
 

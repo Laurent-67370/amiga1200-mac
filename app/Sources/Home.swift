@@ -26,6 +26,9 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
     let libTabs = NSSegmentedControl(labels: HomeDelegate.tabNames, trackingMode: .selectOne, target: nil, action: nil)
     let libList = NSStackView()
     var libKind = Library.whd
+    /// Émulations en cours (processus lancés par l'accueil) : un disque dur ne se modifie pas pendant qu'elles tournent
+    var emuRunning = 0
+    var hdDest = "Jeux", hdUnpack = true
 
     func applicationDidFinishLaunching(_ n: Notification) {
         Paths.installResources()
@@ -100,6 +103,7 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         add(row([
             button("Ajouter des disques durs…") { [self] in addHds() },
             button("Retirer les disques durs") { [self] in s.hds = []; refresh() },
+            button("Ajouter des fichiers sur un disque dur…") { [self] in hdAddFilesPick() },
         ]))
         add(note("Un jeu WHDLoad (.lha) mis dans DF0: se lance seul. Pour AGS, ajoutez tous ses .hdf d'un coup (Workbench.hdf passe en premier)."))
 
@@ -416,6 +420,9 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
                     else if s.hds.count < 8 { Library.touch(it.path); s.hds = s.hds + [it.path]; profile() }
                     refresh()
                 })
+                let add = ClosureButton("Fichiers…") { [self] in hdAddFiles(it.path) }
+                add.toolTip = "Ajouter des fichiers sur ce disque dur (.lha, .zip, .adf, dossiers) ou le préparer pour WHDLoad"
+                views.append(add)
             }
             views.append(ClosureButton("✕") { [self] in Library.remove(it.path); refreshLibrary() })
             libList.addArrangedSubview(row(views))
@@ -619,7 +626,7 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         env["AMIGA1200_JEU"] = game
         env["AMIGA1200_HDF"] = hdf
         p.environment = env
-        p.terminationHandler = { [weak self] _ in DispatchQueue.main.async { self?.checkCrash() } }
-        do { try p.run() } catch { alert("Démarrage impossible", error.localizedDescription) }
+        p.terminationHandler = { [weak self] _ in DispatchQueue.main.async { self?.emuRunning -= 1; self?.checkCrash() } }
+        do { try p.run(); emuRunning += 1 } catch { alert("Démarrage impossible", error.localizedDescription) }
     }
 }
