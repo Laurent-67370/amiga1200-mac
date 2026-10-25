@@ -160,6 +160,9 @@ enum Kickstarts {
         return (add(d), nil)
     }
 
+    /// ROM déjà lue (et déchiffrée) par le scan d'un dossier
+    static func installData(_ d: Data) -> Rom? { [262144, 524288, 1048576].contains(d.count) ? add(d) : nil }
+
     static func remove(_ r: Rom) { try? FileManager.default.removeItem(atPath: r.path) }
 
     /// ROM faites pour cette machine, par ordre de préférence (l'A3000 et l'A4000 se prêtent leurs ROM ; le CDTV

@@ -34,6 +34,11 @@ enum ZipImport {
         return s
     }
 
+    /// Fichiers de l'archive (sans l'extraire), pour le scan d'un dossier
+    static func entries(_ zip: String) -> [String] {
+        String(data: unzip(["-Z1", zip]).1, encoding: .utf8)?.split(separator: "\n").map(String.init) ?? []
+    }
+
     /// Analyse et extraction ; found vide, problem nil et whdArchive faux : une disquette zippée, à garder telle quelle
     static func inspect(_ zip: String) -> Result {
         let name = (zip as NSString).lastPathComponent
