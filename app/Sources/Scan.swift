@@ -44,7 +44,9 @@ enum Scan {
             out.append(Item(path: u.path, rel: root.lastPathComponent + "/" + rel, size: v?.fileSize ?? 0))
             if out.count % 50 == 0 { progress(out.count) }
         }
-        return out
+        // Les fichiers les moins enfouis d'abord : l'original passe avant ses copies rangées plus loin
+        func depth(_ i: Item) -> Int { i.rel.filter { $0 == "/" }.count }
+        return out.sorted { depth($0) != depth($1) ? depth($0) < depth($1) : $0.rel < $1.rel }
     }
 
     /// Archive LhA d'un jeu WHDLoad : le nom d'un .slave figure en clair dans les en-têtes
@@ -190,8 +192,13 @@ enum Scan {
             guard let k = it.kind else { continue }
             if [Library.floppy, Library.whd, Library.whdhdf, Library.hdf, Library.cd, zip].contains(k) && it.why.isEmpty {
                 let id = norm(k == zip ? Library.floppy : k) + "|" + n
-                if lib.contains(id) || (k == zip && (lib.contains(Library.hdf + "|" + n) || lib.contains(Library.whd + "|" + n))) { it.why = "déjà dans la Bibliothèque" }
-                else if !seen.insert(id).inserted { it.why = "en double dans le dossier" }
+                // Empreinte des disquettes et des jeux (petits fichiers) : même contenu sous un autre nom
+                var c = ""
+                if (k == Library.floppy || k == Library.whd) && it.size < 64 << 20, let d = FileManager.default.contents(atPath: it.path) { c = "crc|\(Kickstarts.crc32(d))" }
+                if lib.contains(id) || (k == zip && (lib.contains(Library.hdf + "|" + n) || lib.contains(Library.whd + "|" + n))) {
+                    it.why = "déjà dans la Bibliothèque"
+                    if !c.isEmpty { seen.insert(c) }
+                } else if !seen.insert(id).inserted || (!c.isEmpty && !seen.insert(c).inserted) { it.why = "en double dans le dossier" }
             }
             if !it.why.isEmpty { it.on = false }
         }
