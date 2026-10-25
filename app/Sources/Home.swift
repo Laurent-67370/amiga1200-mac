@@ -33,76 +33,85 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         let col = NSStackView()
         col.orientation = .vertical; col.alignment = .leading; col.spacing = 10
         col.edgeInsets = NSEdgeInsets(top: 18, left: 22, bottom: 18, right: 22)
+        column = col; target = col
 
         let title = NSTextField(labelWithString: "Amiga 1200")
         title.font = .boldSystemFont(ofSize: 26); title.textColor = .systemOrange
-        col.addArrangedSubview(row([title,
+        add(row([title,
             button("✨ Assistant") { [self] in wizard() },
             button("? Aide") { [self] in help() }]))
         summary.textColor = .secondaryLabelColor
-        col.addArrangedSubview(summary)
+        add(summary)
+        let power = NSButton(title: "▶  Allumer l'Amiga", target: self, action: #selector(powerOn))
+        power.bezelStyle = .rounded; power.controlSize = .large; power.keyEquivalent = "\r"
+        power.font = .boldSystemFont(ofSize: 16)
+        power.bezelColor = .systemOrange
+        // Reprendre où l'on en était : la machine de l'accueil (mêmes disques) ou le jeu lancé directement
+        resumeButton.bezelStyle = .rounded; resumeButton.controlSize = .large
+        resumeButton.target = self; resumeButton.action = #selector(resumeGame)
+        add(row([power, resumeButton]))
 
-        col.addArrangedSubview(section("⚡ Préréglages"))
-        col.addArrangedSubview(row([
+        card("⚡ Préréglages")
+        add(row([
             button("AGS / Workbench") { [self] in s.model = "A1200"; s.jit = true; s.rtg = true; refresh() },
             button("A1200 d'origine") { [self] in s.model = "A1200"; s.jit = false; s.rtg = false; stockMemory(); refresh() },
             button("Amiga 500") { [self] in s.model = "A500"; s.jit = false; s.rtg = false; stockMemory(); refresh() },
             button("CD32") { [self] in s.model = "CD32"; refresh() },
         ]))
 
-        col.addArrangedSubview(section("📚 Bibliothèque"))
+        card("📚 Bibliothèque")
         libTabs.target = self; libTabs.action = #selector(libTab)
-        col.addArrangedSubview(libTabs)
+        add(libTabs)
         libList.orientation = .vertical; libList.alignment = .leading; libList.spacing = 4
-        col.addArrangedSubview(libList)
-        col.addArrangedSubview(row([button("Ajouter des fichiers…") { [self] in addFiles(pickMany("Jeux WHDLoad (.lha, .zip), disquettes, disques durs (.hdf), CD ou Kickstart", multiple: true)) }]))
-        col.addArrangedSubview(note("Glissez aussi vos fichiers sur cette fenêtre depuis le Finder. Un jeu WHDLoad se lance d'un clic ; les .zip sont analysés (disque dur ou jeu WHDLoad extraits, archive abîmée signalée) ; un Kickstart est installé comme ROM de la machine."))
+        add(libList)
+        add(row([button("Ajouter des fichiers…") { [self] in addFiles(pickMany("Jeux WHDLoad (.lha, .zip), disquettes, disques durs (.hdf), CD ou Kickstart", multiple: true)) }]))
+        add(note("Glissez aussi vos fichiers sur cette fenêtre depuis le Finder. Un jeu WHDLoad se lance d'un clic ; les .zip sont analysés (disque dur ou jeu WHDLoad extraits, archive abîmée signalée) ; un Kickstart est installé comme ROM de la machine."))
 
-        col.addArrangedSubview(section("🔑 Kickstart"))
-        col.addArrangedSubview(romLabel)
+        card("🔑 Kickstart")
+        add(romLabel)
         romList.orientation = .vertical; romList.alignment = .leading; romList.spacing = 2
-        col.addArrangedSubview(romList)
-        col.addArrangedSubview(row([
+        add(romList)
+        add(row([
             button("Ajouter des Kickstart…") { [self] in for p in pickMany("Kickstart (fichiers ROM : 1.3 pour l'A500, 3.1 pour l'A1200, ROM de la CD32, extension du CDTV…)", multiple: true) { installRom(p) } },
             button("AROS / mes Kickstart") { [self] in s.rom = s.rom == "aros" ? "user" : "aros"; refresh() },
         ]))
-        col.addArrangedSubview(note("Installez-en plusieurs : chacun sert à la machine qui lui convient, reconnu à son contenu (1.3 pour l'Amiga 500, 3.1 pour l'A1200, 3.1.4 et 3.2 compris). La ROM de la CD32 et l'extension du CDTV s'ajoutent de la même façon."))
+        add(note("Installez-en plusieurs : chacun sert à la machine qui lui convient, reconnu à son contenu (1.3 pour l'Amiga 500, 3.1 pour l'A1200, 3.1.4 et 3.2 compris). La ROM de la CD32 et l'extension du CDTV s'ajoutent de la même façon."))
 
-        col.addArrangedSubview(section("💾 Disques"))
-        col.addArrangedSubview(df0Label)
-        col.addArrangedSubview(row([
+        card("💾 Disques")
+        add(df0Label)
+        add(row([
             button("DF0:…") { [self] in if let p = pick("Disquette DF0: (ADF, DMS, IPF…) ou jeu WHDLoad (.lha)") { Library.add(p); s.df0 = p; profile(); refresh() } },
             button("Éjecter DF0:") { [self] in s.df0 = ""; refresh() },
             button("DF1:…") { [self] in if let p = pick("Disquette DF1:") { Library.add(p); s.df1 = p; refresh() } },
             button("Éjecter DF1:") { [self] in s.df1 = ""; refresh() },
         ]))
-        col.addArrangedSubview(df1Label)
-        col.addArrangedSubview(row([
+        add(df1Label)
+        add(row([
             button("DF2:…") { [self] in if let p = pick("Disquette DF2:") { Library.add(p); s.df2 = p; refresh() } },
             button("DF3:…") { [self] in if let p = pick("Disquette DF3:") { Library.add(p); s.df3 = p; refresh() } },
             button("Éjecter DF2: et DF3:") { [self] in s.df2 = ""; s.df3 = ""; refresh() },
             button("Disquette vierge…") { [self] in blankDisk() },
         ]))
-        col.addArrangedSubview(df23Label)
-        col.addArrangedSubview(row([cdLabel, button("Choisir un CD…") { [self] in if let p = pick("CD de la CD32 ou du CDTV (.iso, .chd, .cue)") { Library.add(p); s.cd = p; refresh() } }]))
-        col.addArrangedSubview(hdLabel)
-        col.addArrangedSubview(row([
+        add(df23Label)
+        add(row([cdLabel, button("Choisir un CD…") { [self] in if let p = pick("CD de la CD32 ou du CDTV (.iso, .chd, .cue)") { Library.add(p); s.cd = p; refresh() } }]))
+        add(hdLabel)
+        add(row([
             button("Ajouter des disques durs…") { [self] in addHds() },
             button("Retirer les disques durs") { [self] in s.hds = []; refresh() },
         ]))
-        col.addArrangedSubview(note("Un jeu WHDLoad (.lha) mis dans DF0: se lance seul. Pour AGS, ajoutez tous ses .hdf d'un coup (Workbench.hdf passe en premier)."))
+        add(note("Un jeu WHDLoad (.lha) mis dans DF0: se lance seul. Pour AGS, ajoutez tous ses .hdf d'un coup (Workbench.hdf passe en premier)."))
 
-        col.addArrangedSubview(section("⚙️ Machine"))
+        card("⚙️ Machine")
         modelPopup.addItems(withTitles: ["A500", "A600", "A1200", "A3000", "A4000", "CD32", "CDTV"])
         modelPopup.target = self; modelPopup.action = #selector(modelChanged)
-        col.addArrangedSubview(modelPopup)
-        col.addArrangedSubview(check("JIT 68040 : beaucoup plus rapide (A1200, A3000, A4000)", { [self] in s.jit }) { [self] in s.jit = $0 })
-        col.addArrangedSubview(check("Carte graphique RTG : haute résolution d'AGS et du Workbench", { [self] in s.rtg }) { [self] in s.rtg = $0 })
-        col.addArrangedSubview(check("Volume SHARED: (Documents/Amiga1200/SHARED)", { [self] in s.shared }) { [self] in s.shared = $0 })
-        col.addArrangedSubview(check("NTSC 60 Hz (sinon PAL 50 Hz)", { [self] in s.ntsc }) { [self] in s.ntsc = $0 })
-        col.addArrangedSubview(check("Bruit des lecteurs de disquettes", { [self] in s.floppySound }) { [self] in s.floppySound = $0 })
+        add(modelPopup)
+        add(check("JIT 68040 : beaucoup plus rapide (A1200, A3000, A4000)", { [self] in s.jit }) { [self] in s.jit = $0 })
+        add(check("Carte graphique RTG : haute résolution d'AGS et du Workbench", { [self] in s.rtg }) { [self] in s.rtg = $0 })
+        add(check("Volume SHARED: (Documents/Amiga1200/SHARED)", { [self] in s.shared }) { [self] in s.shared = $0 })
+        add(check("NTSC 60 Hz (sinon PAL 50 Hz)", { [self] in s.ntsc }) { [self] in s.ntsc = $0 })
+        add(check("Bruit des lecteurs de disquettes", { [self] in s.floppySound }) { [self] in s.floppySound = $0 })
         // Mémoire et processeur
-        col.addArrangedSubview(row([NSTextField(labelWithString: "Chip"),
+        add(row([NSTextField(labelWithString: "Chip"),
             memPopup(["Celle du modèle", "512 Ko", "1 Mo", "2 Mo"], [0, 1, 2, 4], { [self] in s.chip }) { [self] in s.chip = $0 },
             NSTextField(labelWithString: "Slow"),
             memPopup(["Celle du modèle", "Aucune", "512 Ko", "1 Mo"], [-1, 0, 2, 4], { [self] in s.slow }) { [self] in s.slow = $0 },
@@ -110,57 +119,51 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
             memPopup(["Aucune", "2 Mo", "4 Mo", "8 Mo"], [0, 2, 4, 8], { [self] in s.fast }) { [self] in s.fast = $0 }]))
         accelPopup.addItems(withTitles: ["Processeur du modèle", "Carte 68030 + FPU 68882", "Carte 68040"])
         accelPopup.target = self; accelPopup.action = #selector(accelChanged)
-        col.addArrangedSubview(row([NSTextField(labelWithString: "Sans JIT (A1200, A3000, A4000) :"), accelPopup]))
-        col.addArrangedSubview(note("Un jeu qui affiche « Error code 103 » manque de mémoire ; certains vieux jeux A500 ne marchent qu'avec 512 Ko de Chip et sans Slow. Le JIT a déjà 64 Mo de Fast et un 68040."))
+        add(row([NSTextField(labelWithString: "Sans JIT (A1200, A3000, A4000) :"), accelPopup]))
+        add(note("Un jeu qui affiche « Error code 103 » manque de mémoire ; certains vieux jeux A500 ne marchent qu'avec 512 Ko de Chip et sans Slow. Le JIT a déjà 64 Mo de Fast et un 68040."))
 
-        col.addArrangedSubview(section("🖥 Image"))
+        card("🖥 Image")
         filterPopup.addItems(withTitles: ["Lisse", "Nette (pixels francs)", "Écran cathodique (lignes de balayage)"])
         filterPopup.target = self; filterPopup.action = #selector(filterChanged)
-        col.addArrangedSubview(row([NSTextField(labelWithString: "Filtre :"), filterPopup]))
-        col.addArrangedSubview(check("Pixels réguliers : agrandissement en multiple entier (bandes noires autour)", { [self] in s.integer }) { [self] in s.integer = $0 })
+        add(row([NSTextField(labelWithString: "Filtre :"), filterPopup]))
+        add(check("Pixels réguliers : agrandissement en multiple entier (bandes noires autour)", { [self] in s.integer }) { [self] in s.integer = $0 })
+        add(check("Image sur toute la fenêtre (sinon en 4:3)", { [self] in s.fill }) { [self] in s.fill = $0 })
+        add(note("Pendant la partie, menu Amiga › Image › Image et cadrage de ce jeu (⌘J) : zoom et position verticale, retenus pour chaque jeu."))
 
-        col.addArrangedSubview(section("🎹 MIDI"))
-        col.addArrangedSubview(check("MIDI sur le port série de l'Amiga", { [self] in s.midi }) { [self] in s.midi = $0 })
+        card("🎹 MIDI")
+        add(check("MIDI sur le port série de l'Amiga", { [self] in s.midi }) { [self] in s.midi = $0 })
         midiBox.orientation = .vertical; midiBox.alignment = .leading; midiBox.spacing = 6
         midiOutPopup.target = self; midiOutPopup.action = #selector(midiChanged)
         midiInPopup.target = self; midiInPopup.action = #selector(midiChanged)
         midiBox.addArrangedSubview(row([NSTextField(labelWithString: "Sortie :"), midiOutPopup]))
         midiBox.addArrangedSubview(row([NSTextField(labelWithString: "Entrée :"), midiInPopup]))
-        col.addArrangedSubview(midiBox)
-        col.addArrangedSubview(note("L'Amiga joue sur un synthétiseur USB, Bluetooth ou réseau, ou sur une application de synthé (GarageBand ne reçoit pas le MIDI : prenez par exemple SimpleSynth ou un instrument virtuel) ; un clavier MIDI peut jouer sur l'Amiga (Bars & Pipes, Music-X, OctaMED…)."))
+        add(midiBox)
+        add(note("L'Amiga joue sur un synthétiseur USB, Bluetooth ou réseau, ou sur une application de synthé (GarageBand ne reçoit pas le MIDI : prenez par exemple SimpleSynth ou un instrument virtuel) ; un clavier MIDI peut jouer sur l'Amiga (Bars & Pipes, Music-X, OctaMED…)."))
 
-        let power = NSButton(title: "▶  Allumer l'Amiga", target: self, action: #selector(powerOn))
-        power.bezelStyle = .rounded; power.controlSize = .large; power.keyEquivalent = "\r"
-        power.font = .boldSystemFont(ofSize: 16)
-        col.addArrangedSubview(power)
-        // Reprendre où l'on en était : la machine de l'accueil (mêmes disques) ou le jeu lancé directement
-        resumeButton.bezelStyle = .rounded; resumeButton.controlSize = .large
-        resumeButton.target = self; resumeButton.action = #selector(resumeGame)
-        col.addArrangedSubview(resumeButton)
-
-        col.addArrangedSubview(section("🗂 Configurations"))
+        card("🗂 Configurations")
         cfgList.orientation = .vertical; cfgList.alignment = .leading; cfgList.spacing = 2
-        col.addArrangedSubview(cfgList)
-        col.addArrangedSubview(row([
+        add(cfgList)
+        add(row([
             button("Enregistrer…") { [self] in saveConfig() },
             button("Exporter .uae…") { [self] in exportUae() },
             button("Importer .uae…") { [self] in if let p = pick("Configuration WinUAE ou Amiberry (.uae)") { alert("Import", ConfigsIO.import(s, from: URL(fileURLWithPath: p))); refresh() } },
         ]))
-        col.addArrangedSubview(note("Une configuration garde la machine, la mémoire et ses disques. L'export .uae se relit dans WinUAE, Amiberry et les versions web et Android. La machine choisie est aussi retenue pour chaque disque de démarrage."))
+        add(note("Une configuration garde la machine, la mémoire et ses disques. L'export .uae se relit dans WinUAE, Amiberry et les versions web et Android. La machine choisie est aussi retenue pour chaque disque de démarrage."))
 
-        col.addArrangedSubview(section("📦 Changer de Mac"))
-        col.addArrangedSubview(row([
+        card("📦 Changer de Mac")
+        add(row([
             button("Tout exporter…") { [self] in exportBackup() },
             button("Importer…") { [self] in importBackup() },
         ]))
-        col.addArrangedSubview(note("Un seul fichier .zip : réglages, Bibliothèque, configurations, Kickstart, sauvegardes d'état, sauvegardes des jeux (WHDLoad, SHARED:), disques extraits des archives et captures. Les jeux rangés ailleurs n'y sont pas : sur l'autre Mac, ajoutez-les à la Bibliothèque. Ce fichier contient vos Kickstart : ne le partagez pas."))
-        col.addArrangedSubview(note("Pendant le jeu : cliquez dans la fenêtre pour capturer la souris, ⌥⌘ ou F12 pour la libérer. ⌘ = touches Amiga. Menu Amiga : disquettes, sauvegarde rapide (⌘S / ⌘L), image, touches de la manette, quitter le jeu (⌘.), plein écran, réinitialisation. « ? Aide » en haut pour le détail."))
+        add(note("Un seul fichier .zip : réglages, Bibliothèque, configurations, Kickstart, sauvegardes d'état, sauvegardes des jeux (WHDLoad, SHARED:), disques extraits des archives et captures. Les jeux rangés ailleurs n'y sont pas : sur l'autre Mac, ajoutez-les à la Bibliothèque. Ce fichier contient vos Kickstart : ne le partagez pas."))
+        target = col
+        add(note("Pendant le jeu : cliquez dans la fenêtre pour capturer la souris, ⌥⌘ ou F12 pour la libérer. ⌘ = touches Amiga. Menu Amiga : disquettes, sauvegarde rapide (⌘S / ⌘L), image, touches de la manette, quitter le jeu (⌘.), plein écran, réinitialisation. « ? Aide » en haut pour le détail."))
 
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
         scroll.documentView = col
         col.translatesAutoresizingMaskIntoConstraints = false
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 760), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 660, height: 820), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Amiga 1200"
         // Fichiers glissés depuis le Finder : Bibliothèque ou Kickstart
         let drop = DropView(frame: window.contentView?.bounds ?? .zero)
@@ -187,7 +190,9 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
     /// Retour à l'accueil après une partie : la reprise et les images sont peut-être nouvelles
-    func applicationDidBecomeActive(_ n: Notification) { if window != nil { refresh() } }
+    func applicationDidBecomeActive(_ n: Notification) { if window != nil { refresh(); checkCrash() } }
+    /// Émulation arrêtée brutalement : rapport proposé
+    func checkCrash() { CrashReport.check { report, date in CrashReport.present(report, date) } }
 
     func buildMenu() {
         let bar = NSMenu()
@@ -282,6 +287,28 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
     }
 
     // ---------- éléments ----------
+    /// Colonne de l'accueil, et carte en cours de remplissage
+    private var column: NSStackView!
+    private var target: NSStackView!
+    func add(_ v: NSView) { target.addArrangedSubview(v) }
+    /// Nouvelle carte (titre, puis ce qu'on y ajoute), aussi large que la colonne
+    func card(_ title: String) {
+        let inner = NSStackView()
+        inner.orientation = .vertical; inner.alignment = .leading; inner.spacing = 8
+        inner.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 14, right: 14)
+        inner.addArrangedSubview(section(title))
+        let box = NSBox()
+        box.boxType = .custom
+        box.cornerRadius = 12
+        box.borderColor = .separatorColor
+        box.fillColor = .controlBackgroundColor
+        box.contentViewMargins = .zero
+        box.contentView = inner
+        column.addArrangedSubview(box)
+        box.translatesAutoresizingMaskIntoConstraints = false
+        box.widthAnchor.constraint(equalTo: column.widthAnchor, constant: -44).isActive = true
+        target = inner
+    }
     private var actions: [() -> Void] = []
     func button(_ t: String, _ f: @escaping () -> Void) -> NSButton {
         actions.append(f)
@@ -590,6 +617,7 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
         env["AMIGA1200_JEU"] = game
         env["AMIGA1200_HDF"] = hdf
         p.environment = env
+        p.terminationHandler = { [weak self] _ in DispatchQueue.main.async { self?.checkCrash() } }
         do { try p.run() } catch { alert("Démarrage impossible", error.localizedDescription) }
     }
 }

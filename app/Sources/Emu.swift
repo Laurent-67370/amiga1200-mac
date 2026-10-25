@@ -41,8 +41,10 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     init(content: String, resume: Bool = false) { self.content = content; self.resume = resume }
 
     func applicationDidFinishLaunching(_ n: Notification) {
+        CrashReport.started()
         buildMenu()
         view = EmuView(frame: NSRect(x: 0, y: 0, width: 1024, height: 768))
+        view.game = stateKey
         window = NSWindow(contentRect: view.frame, styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Amiga 1200 — démarrage…"
         window.contentView = view
@@ -73,7 +75,7 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                         let f = Settings.resumeFile
                         let ok = FileManager.default.fileExists(atPath: f.path) && amb_load_state(f.path) != 0
                         try? FileManager.default.removeItem(at: f)
-                        self.flash(ok ? "reprise où vous en étiez" : "reprise impossible, l'Amiga redémarre normalement")
+                        self.flash(ok ? "Reprise où vous en étiez" : "Reprise impossible, l'Amiga redémarre normalement")
                     }
                 } else { try? FileManager.default.removeItem(at: Settings.resumeFile) }   // les disques changent : l'ancien état ne vaut plus
                 self.statsTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.stats() }
@@ -118,6 +120,7 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         midi?.stop()
         amb_stop()
         usleep(200_000)   // écriture des disques
+        CrashReport.ended()
     }
     func windowDidResignKey(_ n: Notification) { view.release() }
 
@@ -160,6 +163,8 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         im.addItem(.separator())
         let integer = NSMenuItem(title: "Pixels réguliers (agrandissement entier)", action: #selector(toggleInteger), keyEquivalent: ""); integer.target = self; im.addItem(integer)
         let next = NSMenuItem(title: "Filtre suivant", action: #selector(nextFilter), keyEquivalent: "i"); next.target = self; im.addItem(next)
+        im.addItem(.separator())
+        let frame = NSMenuItem(title: "Image et cadrage de ce jeu…", action: #selector(showDisplay), keyEquivalent: "j"); frame.target = self; im.addItem(frame)
         imageMenu = im
         let imItem = NSMenuItem(title: "Image", action: nil, keyEquivalent: ""); imItem.submenu = im; m.addItem(imItem)
         updateImageMenu()
@@ -183,8 +188,8 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.mainMenu = bar
     }
 
-    @objc func togglePause() { paused.toggle(); amb_pause(paused ? 1 : 0); stats() }
-    @objc func toggleTurbo() { turbo.toggle(); amb_turbo(turbo ? 1 : 0) }
+    @objc func togglePause() { paused.toggle(); amb_pause(paused ? 1 : 0); stats(); flash(paused ? "Pause" : "Reprise") }
+    @objc func toggleTurbo() { turbo.toggle(); amb_turbo(turbo ? 1 : 0); flash(turbo ? "Turbo" : "Vitesse normale") }
     /// Emplacement 1 du jeu en cours (sinon de la machine)
     var stateKey: String { gameName ?? Settings.shared.model }
     @objc func quickSave() { flash(SaveStates.save(stateKey, 0) ? "État 1 sauvegardé" : "Sauvegarde impossible") }
@@ -223,7 +228,7 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
     var imageMenu: NSMenu?
-    static let filterNames = ["image lisse", "image nette", "écran cathodique"]
+    static let filterNames = ["Image lisse", "Image nette", "Écran cathodique"]
     @objc func setFilter(_ i: NSMenuItem) { applyFilter(i.tag) }
     @objc func nextFilter() { applyFilter((Settings.shared.filter + 1) % 3) }
     func applyFilter(_ f: Int) {
@@ -233,7 +238,7 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func toggleInteger() {
         Settings.shared.integer.toggle()
         view.applyFilter(); updateImageMenu()
-        flash(Settings.shared.integer ? "pixels réguliers" : "image à la taille de la fenêtre")
+        flash(Settings.shared.integer ? "Pixels réguliers" : "Image à la taille de la fenêtre")
     }
     func updateImageMenu() {
         for it in imageMenu?.items ?? [] {
@@ -246,7 +251,7 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let g = stateKey
         if let m = PadKeys.dialog(game: g, title: (g as NSString).deletingPathExtension) {
             Gamepads.shared.keyMap = m
-            flash(m.isEmpty ? "manette par défaut" : "touches de la manette enregistrées pour ce jeu")
+            flash(m.isEmpty ? "Manette par défaut" : "Touches de la manette enregistrées pour ce jeu")
         }
     }
     // Touche de sortie des jeux WHDLoad
@@ -255,7 +260,7 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let k = UInt32(Settings.shared.quitKey)
         amb_key(1, k)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { amb_key(0, k) }
-        flash("touche de sortie : " + (EmuDelegate.quitKeys.first { $0.0 == Int(k) }?.1 ?? "?"))
+        flash("Touche de sortie : " + (EmuDelegate.quitKeys.first { $0.0 == Int(k) }?.1 ?? "?"))
     }
     @objc func setQuitKey(_ i: NSMenuItem) {
         Settings.shared.quitKey = i.tag
@@ -288,7 +293,14 @@ final class EmuDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         try? p.run()
         NSApp.terminate(nil)
     }
-    func flash(_ t: String) { window.title = "Amiga 1200 — \(t)" }
+    /// Message bref dans une bulle, sur l'image
+    func flash(_ t: String) { view?.show(t) }
+    var displayPanel: DisplayPanel?
+    @objc func showDisplay() {
+        view.release()
+        displayPanel = DisplayPanel(game: stateKey) { [weak self] in self?.view.applyFilter(); self?.updateImageMenu() }
+        displayPanel?.show(over: window)
+    }
 }
 
 /// Image de l'Amiga (Core Animation) et entrées clavier et souris
@@ -302,6 +314,10 @@ final class EmuView: NSView {
     /// Image de l'Amiga, et lignes de balayage par-dessus (écran cathodique)
     private let screen = CALayer(), scan = CALayer()
     private var imgW = 0, imgH = 0
+    /// Jeu en cours : son cadrage (zoom, décalage vertical)
+    var game = ""
+    private let toast = NSTextField(labelWithString: "")
+    private var toastSerial = 0
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -310,9 +326,35 @@ final class EmuView: NSView {
         screen.contentsGravity = .resize
         scan.contentsGravity = .resize
         scan.magnificationFilter = .nearest
+        layer?.masksToBounds = true
         layer?.addSublayer(screen)
         layer?.addSublayer(scan)
+        // Bulle des messages, en bas de l'image
+        toast.font = .systemFont(ofSize: 14, weight: .medium)
+        toast.textColor = .white
+        toast.alignment = .center
+        toast.wantsLayer = true
+        toast.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.7).cgColor
+        toast.layer?.cornerRadius = 10
+        toast.layer?.zPosition = 10
+        toast.alphaValue = 0
+        addSubview(toast)
         applyFilter()
+    }
+
+    /// Message bref : une bulle qui s'efface d'elle-même
+    func show(_ text: String) {
+        toastSerial += 1
+        let serial = toastSerial
+        toast.stringValue = "  " + text + "  "
+        toast.sizeToFit()
+        let w = min(toast.frame.width + 16, bounds.width - 20), h = toast.frame.height + 12
+        toast.frame = NSRect(x: ((bounds.width - w) / 2).rounded(), y: 24, width: w, height: h)
+        toast.alphaValue = 1
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            guard let self, serial == self.toastSerial else { return }
+            NSAnimationContext.runAnimationGroup { c in c.duration = 0.4; self.toast.animator().alphaValue = 0 }
+        }
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -340,22 +382,28 @@ final class EmuView: NSView {
 
     override func layout() { super.layout(); frameScreen() }
 
-    /// Image centrée aux proportions de l'Amiga ; pixels réguliers : le plus grand multiple entier qui tient dans la fenêtre
-    private func frameScreen() {
+    /// Image en 4:3 centrée, ou sur toute la fenêtre ; pixels réguliers : le plus grand multiple entier qui tient dans la
+    /// fenêtre ; puis le cadrage du jeu (zoom et décalage vertical)
+    func frameScreen() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         let b = bounds
         guard imgW > 0, imgH > 0, b.width > 0, b.height > 0 else { screen.frame = b; scan.frame = b; return }
+        let s = Settings.shared
         let iw = CGFloat(imgW), ih = CGFloat(imgH)
-        var w = b.width, h = b.width * ih / iw
-        if h > b.height { h = b.height; w = h * iw / ih }
-        if Settings.shared.integer {
+        var w = b.width, h = b.height
+        if s.integer {
             let sf = window?.backingScaleFactor ?? 2
             let k = floor(min(b.width * sf / iw, b.height * sf / ih))
-            if k >= 1 { w = iw * k / sf; h = ih * k / sf }
+            if k >= 1 { w = iw * k / sf; h = ih * k / sf } else { h = min(b.height, b.width * ih / iw); w = h * iw / ih }
+        } else if !s.fill {
+            if b.width * 3 > b.height * 4 { w = b.height * 4 / 3 } else { h = b.width * 3 / 4 }
         }
-        screen.frame = CGRect(x: ((b.width - w) / 2).rounded(), y: ((b.height - h) / 2).rounded(), width: w, height: h)
+        let zoom = CGFloat(game.isEmpty ? 1 : s.zoom(game)), shift = CGFloat(game.isEmpty ? 0 : s.shiftY(game))
+        w *= zoom; h *= zoom
+        // Décalage vers le bas pour une valeur positive (la couche a son origine en bas)
+        screen.frame = CGRect(x: ((b.width - w) / 2).rounded(), y: ((b.height - h) / 2 - shift * h).rounded(), width: w, height: h)
         scan.frame = screen.frame
     }
 

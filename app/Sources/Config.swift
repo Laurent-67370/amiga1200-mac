@@ -94,6 +94,14 @@ final class Settings {
     var filter: Int { get { d.object(forKey: "filter") as? Int ?? (sharp ? 1 : 0) } set { d.set(newValue, forKey: "filter") } }
     /// Agrandissement en multiple entier des pixels de l'Amiga (pixels tous de la même taille)
     var integer: Bool { get { d.bool(forKey: "integer") } set { d.set(newValue, forKey: "integer") } }
+    /// Image étirée sur toute la fenêtre (sinon en 4:3, comme un moniteur de l'époque)
+    var fill: Bool { get { d.bool(forKey: "fill") } set { d.set(newValue, forKey: "fill") } }
+    /// Cadrage d'un jeu : zoom (1 à 1,6 : l'image déborde, rognée par la fenêtre) et décalage vertical (-0,25 à 0,25)
+    func zoom(_ game: String) -> Double { d.object(forKey: "zoom:" + game) as? Double ?? 1 }
+    func shiftY(_ game: String) -> Double { d.object(forKey: "decalage:" + game) as? Double ?? 0 }
+    func setFraming(_ game: String, _ zoom: Double, _ shift: Double) {
+        d.set(zoom, forKey: "zoom:" + game); d.set(shift, forKey: "decalage:" + game)
+    }
     /// MIDI sur le port série de l'Amiga (CoreMIDI) ; appareils choisis par leur nom (vide : le premier, aucun en entrée)
     var midi: Bool { get { d.bool(forKey: "midi") } set { d.set(newValue, forKey: "midi") } }
     var midiOut: String { get { d.string(forKey: "midiOut") ?? "" } set { d.set(newValue, forKey: "midiOut") } }

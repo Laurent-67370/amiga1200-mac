@@ -121,6 +121,7 @@ final class ClosureButton: NSButton {
     convenience init(_ title: String, _ f: @escaping () -> Void) {
         self.init(frame: .zero)
         self.title = title; bezelStyle = .rounded; handler = f
+        if title.hasPrefix("▶") { bezelColor = .systemOrange }   // boutons qui lancent un jeu
         target = self; action = #selector(fire)
     }
     @objc private func fire() { handler?() }
