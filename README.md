@@ -18,7 +18,7 @@ Amiga Forever compris).
 | Version | Dépôt | Pour | Particularités | Obtenir |
 |---|---|---|---|---|
 | **Web**, l'origine du projet | [amiga1200](https://github.com/laurent-67370/amiga1200) | Navigateur : ordinateur, Android, iPhone, iPad | Rien à installer, hors ligne (application PWA), deux moteurs (WinUAE 6 et PUAE) | [Ouvrir la page](https://laurent-67370.github.io/amiga1200/) |
-| **Android** | [amiga1200-android](https://github.com/laurent-67370/amiga1200-android) | Téléphones et tablettes 64 bits (Android 9 et plus) | **JIT**, manette et clavier tactiles, raccourcis sur l'écran d'accueil | [APK (Releases → dev)](https://github.com/laurent-67370/amiga1200-android/releases/tag/dev) |
+| **Android** | [amiga1200-android](https://github.com/laurent-67370/amiga1200-android) | Téléphones et tablettes 64 bits (Android 9 et plus) | **JIT**, manette et clavier tactiles, raccourcis sur l'écran d'accueil, disques d'un NAS (SMB) lus sur place | [APK (Releases → dev)](https://github.com/laurent-67370/amiga1200-android/releases/tag/dev) |
 | **Mac** (ce dépôt) | [amiga1200-mac](https://github.com/laurent-67370/amiga1200-mac) | Mac Apple Silicon (macOS 13 et plus) | **JIT**, application macOS (menus, CoreMIDI, manettes Game Controller) | [.dmg (Releases → dev)](https://github.com/laurent-67370/amiga1200-mac/releases/tag/dev) |
 | **Windows et Linux** | [amiga1200-pc](https://github.com/laurent-67370/amiga1200-pc) | PC x64 : Windows 10/11, Linux (AppImage) | Une seule base pour les deux systèmes, .zip portable et AppImage autonome (sans JIT : 68040 interprété) | [.zip et AppImage (Releases → dev)](https://github.com/laurent-67370/amiga1200-pc/releases/tag/dev) |
 
@@ -46,6 +46,8 @@ Il faut macOS 13 ou plus récent, sur un Mac Apple Silicon.
   DF3:, **disquette vierge** formatée (pour les sauvegardes des jeux), CD, jusqu'à **8 disques durs** (HDF, AGS
   compris), machine (**A500, A600, A1200, A3000, A4000, CD32, CDTV**), JIT, carte graphique RTG, volume SHARED:, NTSC,
   bruit des lecteurs.
+  Disques d'un NAS : partage monté dans le Finder (SMB), les .hdf y sont lus et écrits sur place ; connexion stable
+  conseillée, un seul appareil à la fois sur un même disque.
 - **Image** : lisse, nette (pixels francs) ou **écran cathodique** (lignes de balayage), **pixels réguliers**
   (agrandissement en multiple entier), 4:3 ou toute la fenêtre, et **cadrage retenu pour chaque jeu** (zoom, position
   verticale : ⌘J pendant la partie).
