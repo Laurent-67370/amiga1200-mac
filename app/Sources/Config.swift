@@ -68,6 +68,8 @@ enum Paths {
 
 /// Réglages, gardés par macOS (UserDefaults) et relus par le processus de l'émulation
 final class Settings {
+    /// Disques durs branchés à la fois (DH0: à DH15:)
+    static let maxHds = 16
     static let shared = Settings()
     private let d = UserDefaults.standard
 
@@ -108,7 +110,7 @@ final class Settings {
     var midiIn: String { get { d.string(forKey: "midiIn") ?? "" } set { d.set(newValue, forKey: "midiIn") } }
     /// Touche de sortie des jeux WHDLoad (code RETROK) : F10, * du pavé ou Échap
     var quitKey: Int { get { d.object(forKey: "quitKey") as? Int ?? 291 } set { d.set(newValue, forKey: "quitKey") } }
-    /// Disques durs DH0: à DH7: (chemins), le premier démarre
+    /// Disques durs DH0: à DH15: (chemins), le premier démarre
     var hds: [String] { get { d.stringArray(forKey: "hds") ?? [] } set { d.set(newValue, forKey: "hds") } }
     /// CD de la CD32 ou du CDTV (image .iso ou .chd)
     var cd: String { get { d.string(forKey: "cd") ?? "" } set { d.set(newValue, forKey: "cd") } }
@@ -306,12 +308,13 @@ enum Config {
             }
             // Disques durs sur le pilote d'UAE (uaehf.device) : démarrent AGS et les Workbench préinstallés. Les disques RDB
             // gardent les noms et priorités de démarrage de leurs partitions ; une partition seule reçoit sa géométrie.
-            for (i, p) in hds.prefix(8).enumerated() {
+            for (i, p) in hds.prefix(Settings.maxHds).enumerated() {
                 let rdb = hasRdb(p)
                 amb_log("\((p as NSString).lastPathComponent) : " + (rdb ? "table de partitions (RDB)" : "partition seule (32 secteurs, 1 tête, 2 blocs réservés)"))
                 l.append("hardfile2=rw,DH\(i):\(p),\(rdb ? "0,0,0,512" : "32,1,2,512"),\(i == 0 ? 0 : -1),,uae\(i)")
             }
-            if !hds.isEmpty && s.shared && whdHdf == nil { l.append("filesystem2=rw,DH12:SHARED:\(Paths.shared.path),-128") }
+            // SHARED: : nom d'unité après ceux des disques durs
+            if !hds.isEmpty && s.shared && whdHdf == nil { l.append("filesystem2=rw,DH\(Settings.maxHds):SHARED:\(Paths.shared.path),-128") }
             // Jeu WHDLoad sur .hdf : vos Kickstart dans WHDCommon:Kickstarts (WHDLoad y cherche après Devs:Kickstarts)
             if whdHdf != nil, let w = whdCommon() { l.append("filesystem2=ro,DH11:WHDCommon:\(w.path),-128") }
             // Sans disque dur, ni ROM de démarrage ni carte d'UAE, comme la version web : toute la mémoire au jeu
