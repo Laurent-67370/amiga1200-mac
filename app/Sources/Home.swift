@@ -417,7 +417,7 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
                 let on = s.hds.contains(it.path)
                 views.append(ClosureButton(on ? "✓ Branché" : "+ Brancher") { [self] in
                     if on { s.hds = s.hds.filter { $0 != it.path } }
-                    else if s.hds.count < 8 { Library.touch(it.path); s.hds = s.hds + [it.path]; profile() }
+                    else if s.hds.count < Settings.maxHds { Library.touch(it.path); s.hds = s.hds + [it.path]; profile() }
                     refresh()
                 })
                 let add = ClosureButton("Fichiers…") { [self] in hdAddFiles(it.path) }
@@ -524,7 +524,7 @@ final class HomeDelegate: NSObject, NSApplicationDelegate {
 
     func addHds() {
         var list = s.hds
-        for p in pickMany("Disques durs .hdf (8 au plus)", multiple: true) where !list.contains(p) && list.count < 8 { list.append(p) }
+        for p in pickMany("Disques durs .hdf (\(Settings.maxHds) au plus)", multiple: true) where !list.contains(p) && list.count < Settings.maxHds { list.append(p) }
         // Le Workbench d'AGS démarre : placé en premier
         list.sort { a, b in ((a as NSString).lastPathComponent.lowercased() == "workbench.hdf" ? 0 : 1) < ((b as NSString).lastPathComponent.lowercased() == "workbench.hdf" ? 0 : 1) }
         s.hds = list

@@ -43,7 +43,7 @@ Il faut macOS 13 ou plus récent, sur un Mac Apple Silicon.
   découverte avec AROS), les Kickstart qu'il faut, les fichiers à ranger, puis le bouton qui lance ; « ? Aide » résume
   tout.
 - **Écran d'accueil** : préréglages (AGS / Workbench, A1200 d'origine, Amiga 500, CD32), **quatre lecteurs** DF0: à
-  DF3:, **disquette vierge** formatée (pour les sauvegardes des jeux), CD, jusqu'à **8 disques durs** (HDF, AGS
+  DF3:, **disquette vierge** formatée (pour les sauvegardes des jeux), CD, jusqu'à **16 disques durs** (HDF, AGS
   compris), machine (**A500, A600, A1200, A3000, A4000, CD32, CDTV**), JIT, carte graphique RTG, volume SHARED:, NTSC,
   bruit des lecteurs.
   Disques d'un NAS : partage monté dans le Finder (SMB), les .hdf y sont lus et écrits sur place ; connexion stable
